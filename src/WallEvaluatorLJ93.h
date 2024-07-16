@@ -28,7 +28,7 @@ namespace detail
     {
 //! Evaluates the Lennard-Jones 9-3 wall force
 /*!
- * WallEvaluatorLJ93 computes the Lennard-Jones 9-3 wall potential, which is derived from
+ * WallEvaluatorLJ93 computes the Lennard-Jones 9-3 wall potential, which is derived  from
  * integrating the standard Lennard-Jones potential between a point particle and a half plane:
  *
  * \f[ V(r) = \varepsilon \left( \frac{2}{15}\left(\frac{\sigma}{r}\right)^9 -
