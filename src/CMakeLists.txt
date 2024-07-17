@@ -20,6 +20,7 @@ set(python_files
     bond.py
     flow.py
     pair.py
+    wall.py 
     )
 
 # TODO: Add names of all bond evaluators
