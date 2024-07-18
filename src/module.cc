@@ -62,6 +62,10 @@ void export_PotentialPairColloid(pybind11::module&);
 void export_PotentialPairHertz(pybind11::module&);
 void export_PotentialPairPerturbedLennardJones(pybind11::module&);
 
+// wall
+void export_WallPotentialLJ93(pybind11::module&);
+void export_WallPotentialColloid(pybind11::module&);
+
 #ifdef ENABLE_HIP
 // bond
 void export_PotentialBondDoubleWellGPU(pybind11::module&);
@@ -71,6 +75,11 @@ void export_AnisoPotentialPairTwoPatchMorseGPU(pybind11::module&);
 void export_PotentialPairColloidGPU(pybind11::module&);
 void export_PotentialPairHertzGPU(pybind11::module&);
 void export_PotentialPairPerturbedLennardJonesGPU(pybind11::module&);
+
+// wall
+void export_WallPotentialLJ93GPU(pybind11::module&);
+void export_WallPotentialColloidGPU(pybind11::module&);
+
 #endif // ENABLE_HIP
 
     } // namespace detail
@@ -95,6 +104,11 @@ PYBIND11_MODULE(_azplugins, m)
     export_PotentialPairHertz(m);
     export_PotentialPairPerturbedLennardJones(m);
 
+    // wall
+    export_WallPotentialLJ93(m);
+    export_WallPotentialColloid(m);
+
+
 #ifdef ENABLE_HIP
     // bond
     export_PotentialBondDoubleWellGPU(m);
@@ -104,5 +118,12 @@ PYBIND11_MODULE(_azplugins, m)
     export_PotentialPairColloidGPU(m);
     export_PotentialPairHertzGPU(m);
     export_PotentialPairPerturbedLennardJonesGPU(m);
+
+    // wall
+    export_WallPotentialLJ93GPU(m);
+    export_WallPotentialColloidGPU(m);
+
+
+
 #endif // ENABLE_HIP
     }

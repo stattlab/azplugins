@@ -16,12 +16,21 @@
 
 #include "hoomd/HOOMDMath.h"
 
-#ifdef NVCC
+// #ifdef NVCC
+// #define DEVICE __device__
+// #else
+// #define DEVICE
+// #endif
+
+#ifdef __HIPCC__
 #define DEVICE __device__
 #else
 #define DEVICE
 #endif
 
+
+namespace hoomd
+    {
 namespace azplugins
     {
 namespace detail
@@ -52,7 +61,7 @@ class WallEvaluatorLJ93
     public:
     //! Define the parameter type used by this wall potential evaluator
     typedef Scalar2 param_type;
-
+    // typedef Scalar param_type;
     //! Constructor
     /*!
      * \param _rsq Squared distance between particles
@@ -151,6 +160,7 @@ class WallEvaluatorLJ93
     };
     } // end namespace detail
     } // end namespace azplugins
+    }
 
 #undef DEVICE
 #endif // AZPLUGINS_WALL_EVALUATOR_LJ_93_H_

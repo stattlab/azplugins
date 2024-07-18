@@ -17,11 +17,20 @@
 
 #include "hoomd/HOOMDMath.h"
 
-#ifdef NVCC
+// #ifdef NVCC
+// #define DEVICE __device__
+// #else
+// #define DEVICE
+// #endif
+
+#ifdef __HIPCC__
 #define DEVICE __device__
 #else
 #define DEVICE
 #endif
+
+namespace hoomd
+    {
 
 namespace azplugins
     {
@@ -54,6 +63,7 @@ class WallEvaluatorColloid
     public:
     //! Define the parameter type used by this wall potential evaluator
     typedef Scalar2 param_type;
+    // typedef Scalar param_type;
 
     //! Constructor
     /*!
@@ -196,6 +206,6 @@ class WallEvaluatorColloid
 
     } // end namespace detail
     } // namespace azplugins
-
+  }
 #undef DEVICE
 #endif // AZPLUGINS_WALL_EVALUATOR_COLLOID_H_
