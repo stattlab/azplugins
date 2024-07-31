@@ -30,7 +30,7 @@ potential_tests += [
         -0.394551653468,
     ),
     PotentialTestCase(
-        hoomd.azplugins.wall.LJ93,
+        hoomd.azplugins.wall.LennardJones93,
         {'epsilon': 2.0, 'sigma': 1.05, 'r_cut': 3.0, 'r_extrap': 0.0},
         numpy.array([[1, 1, -3.95]]),
         -1.7333333333333334 - (-0.08572898249635419),

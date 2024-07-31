@@ -93,7 +93,7 @@ class Colloid(wall.WallPotential):
         self._add_typeparam(params)
 
 
-class LJ93(wall.WallPotential):
+class LennardJones93(wall.WallPotential):
     r"""Lennard-Jones 9-3 wall potential.
 
     Args:
@@ -125,13 +125,13 @@ class LJ93(wall.WallPotential):
     Example::
 
         top = hoomd.wall.Plane(origin=(0, 7, 0), normal=(0, -1, 0))
-        wall_potential = azplugins.wall.LJ93(walls=[top])
+        wall_potential = azplugins.wall.LennardJones93(walls=[top])
         wall_potential.params['A'] = {"epsilon": 1.0, "sigma": 1.0, "r_cut": 2.0}
         simulation.operations.integrator.forces.append(wall_potential)
 
     .. py:attribute:: params
 
-        The `LJ93` wall potential parameters. The dictionary has the following
+        The `LennardJones93` wall potential parameters. The dictionary has the following
         keys:
 
         * ``epsilon`` (`float`, **required**) -
@@ -149,7 +149,7 @@ class LJ93(wall.WallPotential):
     """
 
     _ext_module = _azplugins
-    _cpp_class_name = 'WallPotentialLJ93'
+    _cpp_class_name = 'WallPotentialLennardJones93'
 
     def __init__(self, walls):
         super().__init__(walls)

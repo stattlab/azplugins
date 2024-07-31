@@ -47,7 +47,7 @@ set(_aniso_pair_evaluators
 
 # TODO: Add names of all wall pair evaluators
 set(_wall_evaluators
-    LJ93
+    LennardJones93
     Colloid
     )
 
@@ -126,13 +126,6 @@ foreach(_evaluator ${_aniso_pair_evaluators})
         set(_${COMPONENT_NAME}_cu_sources ${_${COMPONENT_NAME}_cu_sources} AnisoPotentialPair${_evaluator}GPUKernel.cu)
     endif()
 endforeach()
-
-#configure_file(export_WallPotential.cc.inc
-#               export_PotentialWallLJ93.cc
-#               @ONLY)
-#set(_${COMPONENT_NAME}_sources ${_${COMPONENT_NAME}_sources} export_PotentialWallLJ93.cc)
-
-
 
 # process wall potentials
 foreach(_evaluator ${_wall_evaluators})

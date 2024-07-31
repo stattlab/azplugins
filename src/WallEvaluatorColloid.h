@@ -17,9 +17,6 @@
 
 #include "hoomd/HOOMDMath.h"
 
-// need to declare these class methods with __device__ qualifiers when building in nvcc
-// DEVICE is __host__ __device__ when included in nvcc and blank when included into the host
-// compiler
 #ifdef __HIPCC__
 #define DEVICE __device__
 #define HOSTDEVICE __host__ __device__
@@ -135,7 +132,6 @@ class WallEvaluatorColloid
      */
     DEVICE void setDiameter(Scalar di, Scalar dj)
         {
-        // std::cout<<"setting diameter: "<<di<<std::endl;
         a = Scalar(0.5) * di;
         }
 
@@ -219,12 +215,10 @@ class WallEvaluatorColloid
         if (rsq < rcutsq && A != 0 && a > 0)
             {
             energy = computePotential<true>(force_divr, rsq);
-
             if (energy_shift)
                 {
                 energy -= computePotential<false>(force_divr, rcutsq);
                 }
-            // std::cout<<"eval2: "<<energy<<std::endl;
             return true;
             }
         else

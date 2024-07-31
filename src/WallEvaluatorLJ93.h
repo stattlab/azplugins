@@ -12,13 +12,11 @@
 #include "hoomd/HOOMDMath.h"
 
 /*!
- * \file WallEvaluatorLJ93.h
+ * \file WallEvaluatorLennardJones93.h
  * \brief Defines the wall potential evaluator class for the LJ 9-3 potential
  */
 
-// need to declare these class methods with __device__ qualifiers when building in nvcc
-// DEVICE is __host__ __device__ when included in nvcc and blank when included into the host
-// compiler
+
 #ifdef __HIPCC__
 #define DEVICE __device__
 #define HOSTDEVICE __host__ __device__
@@ -35,7 +33,7 @@ namespace detail
     {
 //! Evaluates the Lennard-Jones 9-3 wall force
 /*!
- * WallEvaluatorLJ93 computes the Lennard-Jones 9-3 wall potential, which is derived from
+ * WallEvaluatorLennardJones93 computes the Lennard-Jones 9-3 wall potential, which is derived from
  * integrating the standard Lennard-Jones potential between a point particle and a half plane:
  *
  * \f[ V(r) = \varepsilon \left( \frac{2}{15}\left(\frac{\sigma}{r}\right)^9 -
@@ -55,7 +53,7 @@ namespace detail
  * \left(\frac{\sigma}{r}\right)^3 \right) \f]
  */
 
-class WallEvaluatorLJ93
+class WallEvaluatorLennardJones93
     {
     public:
     struct param_type
@@ -109,7 +107,7 @@ class WallEvaluatorLJ93
      * The functor initializes its members from \a _params.
      */
 
-    DEVICE WallEvaluatorLJ93(Scalar _rsq, Scalar _rcutsq, const param_type& _params)
+    DEVICE WallEvaluatorLennardJones93(Scalar _rsq, Scalar _rcutsq, const param_type& _params)
         : rsq(_rsq), rcutsq(_rcutsq), lj1(_params.lj1), lj2(_params.lj2)
         {
         }
@@ -188,7 +186,7 @@ class WallEvaluatorLJ93
      */
     static std::string getName()
         {
-        return std::string("LJ93");
+        return std::string("LennardJones93");
         }
 
 #endif
