@@ -107,8 +107,10 @@ class WallEvaluatorLennardJones93 : public WallEvaluator
      */
 
     DEVICE WallEvaluatorLennardJones93(Scalar _rsq, Scalar _rcutsq, const param_type& _params)
-        : rsq(_rsq), rcutsq(_rcutsq), lj1(_params.lj1), lj2(_params.lj2)
+        : WallEvaluator(_rsq, _rcutsq)
         {
+        lj1 = _params.lj1;
+        lj2 = _params.lj2;
         }
 
     //! LJ 9-3 doesn't use charge

@@ -108,8 +108,11 @@ class WallEvaluatorColloid : public WallEvaluator
      * The functor initializes its members from \a _params.
      */
     DEVICE WallEvaluatorColloid(Scalar _rsq, Scalar _rcutsq, const param_type& _params)
-        : rsq(_rsq), rcutsq(_rcutsq), A(_params.lj1), B(_params.lj2), a(_params.a * Scalar(0.5))
+        : WallEvaluator(_rsq, _rcutsq)
         {
+        A = _params.lj1;
+        B = _params.lj2;
+        a = _params.a * Scalar(0.5);
         }
 
 
