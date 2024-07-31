@@ -11,6 +11,8 @@
 #ifndef AZPLUGINS_WALL_EVALUATOR_COLLOID_H_
 #define AZPLUGINS_WALL_EVALUATOR_COLLOID_H_
 
+#include "WallEvaluator.h"
+
 #ifndef __HIPCC__
 #include <string>
 #endif
@@ -31,6 +33,45 @@ namespace azplugins
     {
 namespace detail
     {
+struct WallPotentialParametersColloid : public WallPotentialParameters
+        {
+
+#ifndef __HIPCC__
+        WallPotentialParametersColloid() : sigma(0), epsilon(0), a(0), lj1(0), lj2(0) { }
+
+        WallPotentialParametersColloid(pybind11::dict v, bool managed = false)
+            {
+            sigma = v["sigma"].cast<Scalar>();
+            epsilon = v["epsilon"].cast<Scalar>();
+            a = v["a"].cast<Scalar>();
+            // a = a * Scalar(0.5);
+            Scalar sigma_3 = sigma * sigma * sigma;
+            Scalar sigma_6 = sigma_3 * sigma_3;
+            lj1 = epsilon * sigma_6 / Scalar(7560.0);
+            lj2 = epsilon / Scalar(6.0);
+            }
+
+        pybind11::dict asDict()
+            {
+            pybind11::dict v;
+            v["sigma"] = sigma;
+            v["epsilon"] = epsilon;
+            v["a"] = a;
+            return v;
+            }
+#endif // __HIPCC__
+
+        Scalar sigma;
+        Scalar epsilon;
+        Scalar a;
+        Scalar lj1;
+        Scalar lj2;
+        }
+#if HOOMD_LONGREAL_SIZE == 32
+        __attribute__((aligned(16)));
+#else
+        __attribute__((aligned(32)));
+#endif
 
 //! Evaluates the Lennard-Jones colloid wall force
 /*!
@@ -54,56 +95,10 @@ namespace detail
  * where \f$ \rho_{\rm w} \f$ and \f$ \rho_{\rm c} \f$ are the wall and colloid densities and \f$
  * \epsilon \f$ is the Lennard-Jones interaction energy.
  */
-class WallEvaluatorColloid
+class WallEvaluatorColloid : public WallEvaluator
     {
     public:
-    struct param_type
-        {
-        DEVICE void load_shared(char*& ptr, unsigned int& available_bytes) { }
-
-        HOSTDEVICE void allocate_shared(char*& ptr, unsigned int& available_bytes) const { }
-
-#ifndef ENABLE_HIP
-        //! set CUDA memory hints
-        void set_memory_hint() const { }
-#endif
-
-#ifndef __HIPCC__
-        param_type() : sigma(0), epsilon(0), a(0), lj1(0), lj2(0) { }
-
-        param_type(pybind11::dict v, bool managed = false)
-            {
-            sigma = v["sigma"].cast<Scalar>();
-            epsilon = v["epsilon"].cast<Scalar>();
-            a = v["a"].cast<Scalar>();
-            // a = a * Scalar(0.5);
-            Scalar sigma_3 = sigma * sigma * sigma;
-            Scalar sigma_6 = sigma_3 * sigma_3;
-            lj1 = epsilon * sigma_6 / Scalar(7560.0);
-            lj2 = epsilon / Scalar(6.0);
-            }
-
-        pybind11::dict asDict()
-            {
-            pybind11::dict v;
-            v["sigma"] = sigma;
-            v["epsilon"] = epsilon;
-            v["a"] = a;
-            return v;
-            }
-#endif
-        Scalar sigma;
-        Scalar epsilon;
-        Scalar a;
-        Scalar lj1;
-        Scalar lj2;
-        }
-#if HOOMD_LONGREAL_SIZE == 32
-        __attribute__((aligned(16)));
-#else
-        __attribute__((aligned(32)));
-#endif
-
+    typedef WallPotentialParametersColloid param_type;
     //! Constructor
     /*!
      * \param _rsq Squared distance between particles
