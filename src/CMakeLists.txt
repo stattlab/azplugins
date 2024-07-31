@@ -130,9 +130,9 @@ endforeach()
 # process wall potentials
 foreach(_evaluator ${_wall_evaluators})
    configure_file(export_WallPotential.cc.inc
-                  export_PotentialWall${_evaluator}.cc
+                  export_WallPotential${_evaluator}.cc
                   @ONLY)
-   set(_${COMPONENT_NAME}_sources ${_${COMPONENT_NAME}_sources} export_PotentialWall${_evaluator}.cc)
+   set(_${COMPONENT_NAME}_sources ${_${COMPONENT_NAME}_sources} export_WallPotential${_evaluator}.cc)
 
    if (ENABLE_HIP)
        configure_file(export_WallPotentialGPU.cc.inc

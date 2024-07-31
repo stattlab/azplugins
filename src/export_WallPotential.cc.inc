@@ -13,7 +13,7 @@
 // #include "WallEvaluatorColloid.h"
 
 #define EVALUATOR_CLASS hoomd::md::EvaluatorWalls<hoomd::azplugins::detail::WallEvaluator@_evaluator@>
-#define EXPORT_FUNCTION export_PotentialWall@_evaluator@
+#define EXPORT_FUNCTION export_WallPotential@_evaluator@
 
 // clang-format on
 

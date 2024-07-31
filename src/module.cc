@@ -66,8 +66,8 @@ void export_PotentialPairPerturbedLennardJones(pybind11::module&);
 void export_PotentialPairDPDThermoGeneralWeight(pybind11::module&);
 
 // wall
-void export_PotentialWallLennardJones93(pybind11::module& m);
-void export_PotentialWallColloid(pybind11::module& m);
+void export_WallPotentialLennardJones93(pybind11::module& m);
+void export_WallPotentialColloid(pybind11::module& m);
 
 #ifdef ENABLE_HIP
 // bond
@@ -83,8 +83,8 @@ void export_PotentialPairPerturbedLennardJonesGPU(pybind11::module&);
 void export_PotentialPairDPDThermoGeneralWeightGPU(pybind11::module&);
 
 // wall
-void export_PotentialWallLennardJones93GPU(pybind11::module& m);
-void export_PotentialWallColloidGPU(pybind11::module& m);
+void export_WallPotentialLennardJones93GPU(pybind11::module& m);
+void export_WallPotentialColloidGPU(pybind11::module& m);
 
 #endif // ENABLE_HIP
 
@@ -114,8 +114,8 @@ PYBIND11_MODULE(_azplugins, m)
     export_PotentialPairDPDThermoGeneralWeight(m);
 
     // wall
-    export_PotentialWallLennardJones93(m);
-    export_PotentialWallColloid(m);
+    export_WallPotentialLennardJones93(m);
+    export_WallPotentialColloid(m);
 
 #ifdef ENABLE_HIP
     // bond
@@ -131,8 +131,8 @@ PYBIND11_MODULE(_azplugins, m)
     export_PotentialPairDPDThermoGeneralWeightGPU(m);
 
     // wall
-    export_PotentialWallLennardJones93GPU(m);
-    export_PotentialWallColloidGPU(m);
+    export_WallPotentialLennardJones93GPU(m);
+    export_WallPotentialColloidGPU(m);
 
 #endif // ENABLE_HIP
     }

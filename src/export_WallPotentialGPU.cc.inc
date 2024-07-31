@@ -12,7 +12,7 @@
 #include "WallEvaluator@_evaluator@.h"
 
 #define EVALUATOR_CLASS hoomd::md::EvaluatorWalls<hoomd::azplugins::detail::WallEvaluator@_evaluator@>
-#define EXPORT_FUNCTION export_PotentialWall@_evaluator@GPU
+#define EXPORT_FUNCTION export_WallPotential@_evaluator@GPU
 
 // clang-format on
 

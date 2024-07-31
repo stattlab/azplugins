@@ -20,6 +20,6 @@ azplugins.wall
 .. automodule:: hoomd.azplugins.wall
     :synopsis: Wall potentials.
     :members: Colloid,
-        LJ93,
+        LennardJones93,
     :no-inherited-members:
     :show-inheritance:
