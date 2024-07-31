@@ -94,9 +94,9 @@ class WallEvaluatorLennardJones93
         Scalar lj2;
         }
 #if HOOMD_LONGREAL_SIZE == 32
-        __attribute__((aligned(8)));
-#else
         __attribute__((aligned(16)));
+#else
+        __attribute__((aligned(32)));
 #endif
     //! Constructor
     /*!
@@ -201,5 +201,8 @@ class WallEvaluatorLennardJones93
     } // end namespace detail
     } // end namespace azplugins
     } // end namespace hoomd
+
+#undef DEVICE
+#undef HOSTDEVICE
 
 #endif // AZPLUGINS_WALL_EVALUATOR_LJ_93_H_

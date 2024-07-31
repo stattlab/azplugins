@@ -99,9 +99,9 @@ class WallEvaluatorColloid
         Scalar lj2;
         }
 #if HOOMD_LONGREAL_SIZE == 32
-        __attribute__((aligned(8)));
-#else
         __attribute__((aligned(16)));
+#else
+        __attribute__((aligned(32)));
 #endif
 
     //! Constructor
@@ -117,23 +117,6 @@ class WallEvaluatorColloid
         {
         }
 
-    //! Colloid diameter is needed
-    DEVICE static bool needsDiameter()
-        {
-        return true;
-        }
-    //! Accept the optional diameter values
-    /*!
-     * \param di Diameter of particle
-     * \param dj Dummy diameter
-     *
-     * \note The way HOOMD computes wall forces by recycling evaluators requires that we give
-     *       a second diameter, even though this is meaningless for the potential.
-     */
-    DEVICE void setDiameter(Scalar di, Scalar dj)
-        {
-        a = Scalar(0.5) * di;
-        }
 
     //! Colloid wall potential doesn't use charge
     DEVICE static bool needsCharge()
@@ -248,5 +231,8 @@ class WallEvaluatorColloid
     } // end namespace detail
     } // namespace azplugins
     } // end namespace hoomd
+
+#undef DEVICE
+#undef HOSTDEVICE
 
 #endif // AZPLUGINS_WALL_EVALUATOR_LJ_93_H_
