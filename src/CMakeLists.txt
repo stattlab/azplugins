@@ -20,6 +20,7 @@ set(python_files
     bond.py
     flow.py
     pair.py
+    dihedral.py
     )
 
 # TODO: Add names of all bond evaluators
@@ -43,6 +44,11 @@ set(_dpd_evaluators
 # TODO: Add names of all anisotropic pair evaluators
 set(_aniso_pair_evaluators
     TwoPatchMorse
+    )
+
+# TODO: Add names of all dihedral evaluators
+set(_dihedral_evaluators
+    CombinedBT
     )
 
 # process bond potentials
@@ -118,6 +124,25 @@ foreach(_evaluator ${_aniso_pair_evaluators})
                        @ONLY)
         set(_${COMPONENT_NAME}_sources ${_${COMPONENT_NAME}_sources} export_AnisoPotentialPair${_evaluator}GPU.cc)
         set(_${COMPONENT_NAME}_cu_sources ${_${COMPONENT_NAME}_cu_sources} AnisoPotentialPair${_evaluator}GPUKernel.cu)
+    endif()
+endforeach()
+
+# process dihedral potentials
+foreach(_evaluator ${_dihedral_evaluators})
+    configure_file(export_PotentialDihedral.cc.inc
+                   export_PotentialDihedral${_evaluator}.cc
+                   @ONLY)
+    set(_${COMPONENT_NAME}_sources ${_${COMPONENT_NAME}_sources} export_PotentialDihedral${_evaluator}.cc)
+
+    if (ENABLE_HIP)
+        configure_file(export_PotentialDihedralGPU.cc.inc
+                       export_PotentialDihedral${_evaluator}GPU.cc
+                       @ONLY)
+        configure_file(PotentialDihedralGPUKernel.cu.inc
+                       PotentialDihedral${_evaluator}GPUKernel.cu
+                       @ONLY)
+        set(_${COMPONENT_NAME}_sources ${_${COMPONENT_NAME}_sources} export_PotentialDihedral${_evaluator}GPU.cc)
+        set(_${COMPONENT_NAME}_cu_sources ${_${COMPONENT_NAME}_cu_sources} PotentialDihedral${_evaluator}GPUKernel.cu)
     endif()
 endforeach()
 
