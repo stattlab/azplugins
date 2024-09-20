@@ -2,6 +2,7 @@
 // Copyright (c) 2021-2024, Auburn University
 // Part of azplugins, released under the BSD 3-Clause License.
 
+#include "CombinedBT.h"
 #include "hoomd/BondedGroupData.h"
 #include "hoomd/ForceCompute.h"
 
@@ -21,31 +22,38 @@
 #ifndef AZPLUGINS_COMBINEDBT_DIHEDRAL_FORCE_COMPUTE_H__
 #define AZPLUGINS_COMBINEDBT_DIHEDRAL_FORCE_COMPUTE_H__
 
+namespace hoomd
+    {
 namespace azplugins
     {
 struct dihedral_combinedbt_params
     {
-    Scalar k1;
-    Scalar k2;
-    Scalar k3;
-    Scalar k4;
+    Scalar k_phi;
+    Scalar a0;
+    Scalar a1;
+    Scalar a2;
+    Scalar a3;
+    Scalar a4;
 
 #ifndef __HIPCC__
-    dihedral_combinedbt_params() : k1(0.), k2(0.), k3(0.), k4(0.) { }
+    dihedral_combinedbt_params() : k_phi(0.), a0(0.), a1(0.), a2(0.), a3(0.), a4(0.) { }
 
     dihedral_combinedbt_params(pybind11::dict v)
-        : k1(v["k1"].cast<Scalar>()), k2(v["k2"].cast<Scalar>()), k3(v["k3"].cast<Scalar>()),
-          k4(v["k4"].cast<Scalar>())
+        : k_phi(v["k_phi"].cast<Scalar>()), a0(v["a0"].cast<Scalar>()),
+            a1(v["a1"].cast<Scalar>()), a2(v["a2"].cast<Scalar>()),
+            a3(v["a3"].cast<Scalar>()), a4(v["a4"].cast<Scalar>())
         {
         }
 
     pybind11::dict asDict()
         {
         pybind11::dict v;
-        v["k1"] = k1;
-        v["k2"] = k2;
-        v["k3"] = k3;
-        v["k4"] = k4;
+        v["k_phi"] = k_phi;
+        v["a0"] = a0;
+        v["a1"] = a1;
+        v["a2"] = a2;
+        v["a3"] = a3;
+        v["a4"] = a4;
         return v;
         }
 #endif
@@ -67,7 +75,8 @@ class PYBIND11_EXPORT CombinedBTDihedralForceCompute : public ForceCompute
     virtual ~CombinedBTDihedralForceCompute();
 
     //! Set the parameters
-    virtual void setParams(unsigned int type, Scalar k1, Scalar k2, Scalar k3, Scalar k4);
+    virtual void setParams(unsigned int type, Scalar k_phi, Scalar a0, Scalar a1, 
+                                    Scalar a2, Scalar a3, Scalar a4);
 
     virtual void setParamsPython(std::string type, pybind11::dict params);
 
@@ -88,7 +97,7 @@ class PYBIND11_EXPORT CombinedBTDihedralForceCompute : public ForceCompute
 #endif
 
     protected:
-    GPUArray<Scalar4> m_params;
+    GPUArray<combined_bt_params> m_params;
 
     //!< Dihedral data to use in computing dihedrals
     std::shared_ptr<DihedralData> m_dihedral_data;
@@ -98,5 +107,6 @@ class PYBIND11_EXPORT CombinedBTDihedralForceCompute : public ForceCompute
     };
 
     } // end namespace azplugins
+    } // end namespace hoomd
 
 #endif

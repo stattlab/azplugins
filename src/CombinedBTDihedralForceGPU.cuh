@@ -10,6 +10,7 @@
 #ifndef AZPLUGINS_COMBINEDBT_DIHEDRAL_GPU_CUH_
 #define AZPLUGINS_COMBINEDBT_DIHEDRAL_GPU_CUH_
 
+#include "CombinedBT.h"
 #include "hoomd/BondedGroupData.cuh"
 #include "hoomd/HOOMDMath.h"
 #include "hoomd/ParticleData.cuh"
@@ -29,7 +30,7 @@ hipError_t gpu_compute_combinedBT_dihedral_forces(Scalar4* d_force,
                                             const unsigned int* dihedral_ABCD,
                                             const unsigned int pitch,
                                             const unsigned int* n_dihedrals_list,
-                                            const Scalar4* d_params,
+                                            combined_bt_params d_params,
                                             const unsigned int n_dihedral_types,
                                             const int block_size,
                                             const int warp_size);

@@ -15,6 +15,8 @@ using namespace std;
     \brief Contains code for the CombinedBTDihedralForceCompute class
 */
 
+namespace hoomd
+    {
 namespace azplugins
     {
 /*! \param sysdef System to compute forces on
@@ -35,7 +37,7 @@ CombinedBTDihedralForceCompute::CombinedBTDihedralForceCompute(std::shared_ptr<S
         }
 
     // allocate the parameters
-    GPUArray<Scalar4> params(m_dihedral_data->getNTypes(), m_exec_conf);
+    GPUArray<combined_bt_params> params(m_dihedral_data->getNTypes(), m_exec_conf);
     m_params.swap(params);
     }
 
@@ -53,49 +55,58 @@ CombinedBTDihedralForceCompute::~CombinedBTDihedralForceCompute()
     \param a4 Force parameter in CombinedBT-style dihedral
 
 */
-void CombinedBTDihedralForceCompute::setParams(unsigned int type,
-                                         Scalar k_phi,
-                                         Scalar a0,
-                                         Scalar a1,
-                                         Scalar a2,
-                                         Scalar a3,
-                                         Scalar a4)
-    {
-    // make sure the type is valid
-    if (type >= m_dihedral_data->getNTypes())
-        {
-        throw runtime_error("Invalid dihedral type.");
-        }
+// void CombinedBTDihedralForceCompute::setParams(unsigned int type,
+//                                          Scalar k_phi,
+//                                          Scalar a0,
+//                                          Scalar a1,
+//                                          Scalar a2,
+//                                          Scalar a3,
+//                                          Scalar a4)
+//     {
+//     // make sure the type is valid
+//     if (type >= m_dihedral_data->getNTypes())
+//         {
+//         throw runtime_error("Invalid dihedral type.");
+//         }
 
-    // set parameters in m_params
-    ArrayHandle<Scalar4> h_params(m_params, access_location::host, access_mode::readwrite);
-    h_params.data[type] = make_scalar4(k_phi, a0, a1, a2, a3, a4);
-    }
+//     // set parameters in m_params
+//     ArrayHandle<Scalar6> h_params(m_params, access_location::host, access_mode::readwrite);
+//     h_params.data[type] = make_scalar6(k_phi, a0, a1, a2, a3, a4);
+//     }
 
 void CombinedBTDihedralForceCompute::setParamsPython(std::string type, pybind11::dict params)
     {
+    // make sure the type is valid
     auto typ = m_dihedral_data->getTypeByName(type);
-    dihedral_combinedbt_params _params(params);
-    setParams(typ, _params.k_phi, _params.a0, _params.a1, _params.a2, _params.a3, _params.a4);
+    combined_bt_params _params(params);
+    // setParams(typ, _params.k_phi, _params.a0, _params.a1, _params.a2, _params.a3, _params.a4);
+    ArrayHandle<combined_bt_params> h_params(m_params,
+                                                   access_location::host,
+                                                   access_mode::readwrite);
+    h_params.data[typ] = _params;
     }
 
 pybind11::dict CombinedBTDihedralForceCompute::getParams(std::string type)
     {
     auto typ = m_dihedral_data->getTypeByName(type);
-    // make sure the type is valid
-    if (typ >= m_dihedral_data->getNTypes())
-        {
-        throw runtime_error("Invalid dihedral type.");
-        }
-    ArrayHandle<Scalar4> h_params(m_params, access_location::host, access_mode::read);
-    auto val = h_params.data[typ];
+    // // make sure the type is valid
+    // if (typ >= m_dihedral_data->getNTypes())
+    //     {
+    //     throw runtime_error("Invalid dihedral type.");
+    //     }
+    // ArrayHandle<Scalar4> h_params(m_params, access_location::host, access_mode::read);
+    // auto val = h_params.data[typ];
     pybind11::dict params;
-    // note: the values stored in params are precomputed k/2 values
-    params["k1"] = val.x * 2;
-    params["k2"] = val.y * 2;
-    params["k3"] = val.z * 2;
-    params["k4"] = val.w * 2;
-    return params;
+    // // note: the values stored in params are precomputed k/2 values
+    // params["k1"] = val.x * 2;
+    // params["k2"] = val.y * 2;
+    // params["k3"] = val.z * 2;
+    // params["k4"] = val.w * 2;
+    ArrayHandle<combined_bt_params> h_params(m_params,
+                                                   access_location::host,
+                                                   access_mode::read);
+    // return params;
+    return h_params.data[typ].asDict();
     }
 
 /*! Actually perform the force computation
@@ -113,7 +124,8 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
     ArrayHandle<Scalar> h_virial(m_virial, access_location::host, access_mode::overwrite);
 
     // access parameter data
-    ArrayHandle<Scalar4> h_params(m_params, access_location::host, access_mode::read);
+    ArrayHandle<combined_bt_params> h_params(m_params, access_location::host, 
+                                            access_mode::read);
 
     // Zero data for force calculation before computation
     memset((void*)h_force.data, 0, sizeof(Scalar4) * m_force.getNumElements());
@@ -139,7 +151,7 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
     Scalar df, df1, ddf1, fg, hg, fga, hgb, gaa, gbb;
     Scalar dtfx, dtfy, dtfz, dtgx, dtgy, dtgz, dthx, dthy, dthz;
     Scalar c, s, p, sx2, sy2, sz2, cos_term, e_dihedral;
-    Scalar k1, k2, k3, k4;
+    Scalar k_phi, a0, a1, a2, a3, a4;
     Scalar dihedral_virial[6];
     Scalar angle_012_virial[6];
     Scalar angle_123_virial[6];
@@ -241,16 +253,12 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
         // get values for k1/2 through k4/2
         // ----- The 1/2 factor is already stored in the parameters --------
         dihedral_type = m_dihedral_data->getTypeByIndex(n);
-        // k1 = h_params.data[dihedral_type].x;
-        // k2 = h_params.data[dihedral_type].y;
-        // k3 = h_params.data[dihedral_type].z;
-        // k4 = h_params.data[dihedral_type].w;
-        k_phi = h_params.data[dihedral_type].     ;
-        a0 = h_params.data[dihedral_type].    ;
-        a1 = h_params.data[dihedral_type].    ;
-        a2 = h_params.data[dihedral_type].    ;
-        a3 = h_params.data[dihedral_type].    ;
-        a4 = h_params.data[dihedral_type].    ;
+        k_phi = h_params.data[dihedral_type].k_phi;
+        a0 = h_params.data[dihedral_type].a0;
+        a1 = h_params.data[dihedral_type].a1;
+        a2 = h_params.data[dihedral_type].a2;
+        a3 = h_params.data[dihedral_type].a3;
+        a4 = h_params.data[dihedral_type].a4;
 
         // calculate the potential p = k_phi * sin^3(theta_i-1) * sin^3(theta_i) * sum (n=0,4) (a_n*cos^n(phi) )
         // and df = dp/dc
@@ -346,14 +354,14 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
         //Caa = np.dot(vb1,vb1);
         //Cab = np.dot(vb1,vb2m);
         //Cbb = np.dot(vb2m,vb2m);
-        Dab = Caa*Cbb-Cab**2;
+        Dab = Caa*Cbb-Cab*Cab;
         Cbc = vb2m.x * vb3m.x + vb2m.y * vb3m.y + vb2m.z * vb3m.z;
         // Cbc = np.dot(vb2m,vb3m);
         Ccc = vb3m.x * vb3m.x + vb3m.y * vb3m.y + vb3m.z * vb3m.z;
         // Ccc=np.dot(vb3m,vb3m);
         Cac = vb1.x * vb3m.x + vb1.y * vb3m.y + vb1.z * vb3m.z;
         // Cac = np.dot(vb1,vb3m);
-        Dbc = Cbb*Ccc-Cbc**2;
+        Dbc = Cbb*Ccc-Cbc*Cbc;
 
         rb1 = sqrt(Caa);
         rb2 = sqrt(Cbb);
@@ -383,7 +391,7 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
         // V,_,_,_ = V_CBT(r0,r1,r2,r3); p calculated above
     
         //Start by establishing what I need for r0;
-        dVdtheta012 = 3*(sin(theta_012)**2)*cos_theta_012*p;
+        dVdtheta012 = 3*(sin(theta_012)*sin(theta_012))*cos_theta_012*p;
         dtheta012dcostheta012 = 1/sin(theta_012);
         da2dr0 = 2*vb1;
         dabdr0 = vb2m;
@@ -402,18 +410,18 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
         da2dr1 = -2*vb1;
         db2dr1 = 2*vb2m;
         dabdr1 = vb2m-vb1;
-        dcostheta012dr1 = 1/rb1/rb2*(dabdr1)-cos_theta_012/2*((1/rb1**2)*(da2dr1)+1/rb2**2*db2dr1);
+        dcostheta012dr1 = 1/rb1/rb2*(dabdr1)-cos_theta_012/2*((1/rb1/rb1)*(da2dr1)+1/rb2/rb2*db2dr1);
         F1_theta_012 = -dVdtheta012*dtheta012dcostheta012*dcostheta012dr1;
         //dV 123 nonspecific terms;
-        dVdtheta123=3*(sin(theta_123)**2)*cos_theta_123*p;
+        dVdtheta123=3*(sin(theta_123)*sin(theta_123))*cos_theta_123*p;
         dtheta123dcostheta123 = 1/sin(theta_123);
         
         da2dr1_123 = 2*vb2m;
         dabdr1_123 = vb3m;
-        dcostheta123dr1 = 1/rb2/rb3*(dabdr1_123)-cos_theta_123/2/(rb2**2)*(da2dr1_123);
+        dcostheta123dr1 = 1/rb2/rb3*(dabdr1_123)-cos_theta_123/2/(rb2*rb2)*(da2dr1_123);
         F1_theta_123 = -dVdtheta123*dtheta123dcostheta123*dcostheta123dr1;
     
-        dcosphidr1 = -(Dab*Dbc)**(-1/2)*(Cbc*vb1 - Cbc*vb2m+Cab*vb3m+Cbb*vb3m-2*Cac*vb2m-1/Dbc*(Cab*Cbc-Cac*Cbb)*(Ccc*vb2m-Cbc*vb3m)-1/Dab*(Cab*Cbc-Cac*Cbb)*(Caa*vb2m-Cbb*vb1-Cab*vb1+Cab*vb2m));
+        dcosphidr1 = -1/sqrt(Dab*Dbc)*(Cbc*vb1 - Cbc*vb2m+Cab*vb3m+Cbb*vb3m-2*Cac*vb2m-1/Dbc*(Cab*Cbc-Cac*Cbb)*(Ccc*vb2m-Cbc*vb3m)-1/Dab*(Cab*Cbc-Cac*Cbb)*(Caa*vb2m-Cbb*vb1-Cab*vb1+Cab*vb2m));
         F1_phi_0123 = -dVdcosphi_0123*dcosphidr1;
         F1 = F1_phi_0123+F1_theta_012+F1_theta_123;
     
@@ -421,12 +429,12 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
         da2dr2 = 0;
         db2dr2 = -2*vb2m;
         dabdr2 = -vb1;
-        dcostheta012dr2 = 1/rb1/rb2*(dabdr2)-cos_theta_012/2*((1/rb1**2)*(da2dr2)+1/rb2**2*db2dr2);
+        dcostheta012dr2 = 1/rb1/rb2*(dabdr2)-cos_theta_012/2*((1/rb1/rb1)*(da2dr2)+1/rb2/rb2*db2dr2);
         F2_theta_012 = -dVdtheta012*dtheta012dcostheta012*dcostheta012dr2;
         da2dr2_123 = -2*vb2m;
         db2dr2_123 = 2*vb3m;
         dabdr2_123 = vb3m-vb2m;
-        dcostheta123dr2 = 1/rb2/rb3*(dabdr2_123)-cos_theta_123/2*((1/rb2**2)*(da2dr2_123)+1/(rb3**2)*db2dr2_123);
+        dcostheta123dr2 = 1/rb2/rb3*(dabdr2_123)-cos_theta_123/2*((1/rb2/rb2)*(da2dr2_123)+1/(rb3*rb3)*db2dr2_123);
         F2_theta_123 = -dVdtheta123*dtheta123dcostheta123*dcostheta123dr2;
         dcosphidr2 = -(sqrt(1/Dab/Dbc))*(-Cbc*vb1+Cab*vb2m-Cab*vb3m-Cbb*vb1+2*Cac*vb2m-1/Dbc*(Cab*Cbc-Cac*Cbb)*(Cbb*vb3m-Ccc*vb2m-Cbc*vb2m+Cbc*vb3m)-1/Dab*(Cab*Cbc-Cac*Cbb)*(-Caa*vb2m+Cab*vb1));
         // dcosphidr2 = -(Dab*Dbc)**(-1/2)*(-Cbc*vb1+Cab*vb2m-Cab*vb3m-Cbb*vb1+2*Cac*vb2m-1/Dbc*(Cab*Cbc-Cac*Cbb)*(Cbb*vb3m-Ccc*vb2m-Cbc*vb2m+Cbc*vb3m)-1/Dab*(Cab*Cbc-Cac*Cbb)*(-Caa*vb2m+Cab*vb1));
@@ -587,7 +595,8 @@ void export_CombinedDihedralForceCompute(pybind11::module& m)
     {
     pybind11::class_<CombinedBTDihedralForceCompute,
                      ForceCompute,
-                     std::shared_ptr<CombinedBTDihedralForceCompute>>(m, "CombinedBTDihedralForceCompute")
+                     std::shared_ptr<CombinedBTDihedralForceCompute>>(m, 
+                                                    "CombinedBTDihedralForceCompute")
         .def(pybind11::init<std::shared_ptr<SystemDefinition>>())
         .def("setParams", &CombinedBTDihedralForceCompute::setParamsPython)
         .def("getParams", &CombinedBTDihedralForceCompute::getParams);
@@ -595,3 +604,4 @@ void export_CombinedDihedralForceCompute(pybind11::module& m)
 
     } // end namespace detail
     } // end namespace azplugins
+    } // end namespace hoomd

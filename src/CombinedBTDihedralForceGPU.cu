@@ -23,7 +23,7 @@ namespace gpu
     \param virial_pitch pitch of 2D virial array
     \param N number of particles
     \param d_pos particle positions on the device
-    \param d_params Array of combined B-T parameters k1/2, k2/2, k3/2, and k4/2
+    \param d_params Array of combined B-T parameters k_phi, a0,a1,a2,a3,a4
     \param box Box dimensions for periodic boundary condition handling
     \param tlist Dihedral data to use in calculating the forces
     \param dihedral_ABCD List of relative atom positions in the dihedrals
@@ -35,7 +35,7 @@ __global__ void gpu_compute_combinedbt_dihedral_forces_kernel(Scalar4* d_force,
                                                         const size_t virial_pitch,
                                                         const unsigned int N,
                                                         const Scalar4* d_pos,
-                                                        const Scalar4* d_params,
+                                                        const combined_bt_params d_params,
                                                         BoxDim box,
                                                         const group_storage<4>* tlist,
                                                         const unsigned int* dihedral_ABCD,
@@ -165,7 +165,7 @@ __global__ void gpu_compute_combinedbt_dihedral_forces_kernel(Scalar4* d_force,
 
         // get values for k1/2 through k4/2 (MEM TRANSFER: 16 bytes)
         // ----- The 1/2 factor is already stored in the parameters --------
-        Scalar4 params = __ldg(d_params + cur_dihedral_type);
+        combined_bt_params params = __ldg(d_params + cur_dihedral_type);
         Scalar k1 = params.x;
         Scalar k2 = params.y;
         Scalar k3 = params.z;
