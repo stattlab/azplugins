@@ -66,6 +66,9 @@ void export_PotentialPairPerturbedLennardJones(pybind11::module&);
 // dpd
 void export_PotentialPairDPDThermoGeneralWeight(pybind11::module&);
 
+// dihedral
+void export_CombinedBTDihedralForceCompute(pybind11::module&);
+
 #ifdef ENABLE_HIP
 // bond
 void export_PotentialBondDoubleWellGPU(pybind11::module&);
@@ -79,6 +82,9 @@ void export_PotentialPairPerturbedLennardJonesGPU(pybind11::module&);
 
 // dpd
 void export_PotentialPairDPDThermoGeneralWeightGPU(pybind11::module&);
+
+// dihedral
+void export_CombinedBTDihedralForceComputeGPU(pybind11::module&);
 
 #endif // ENABLE_HIP
 

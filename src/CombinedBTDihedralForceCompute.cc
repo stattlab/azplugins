@@ -74,7 +74,7 @@ CombinedBTDihedralForceCompute::~CombinedBTDihedralForceCompute()
 //     h_params.data[type] = make_scalar6(k_phi, a0, a1, a2, a3, a4);
 //     }
 
-void CombinedBTDihedralForceCompute::setParamsPython(std::string type, pybind11::dict params)
+void CombinedBTDihedralForceCompute::setParams(std::string type, pybind11::dict params)
     {
     // make sure the type is valid
     auto typ = m_dihedral_data->getTypeByName(type);
@@ -345,14 +345,14 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
 
 namespace detail
     {
-void export_CombinedDihedralForceCompute(pybind11::module& m)
+void export_CombinedBTDihedralForceCompute(pybind11::module& m)
     {
     pybind11::class_<CombinedBTDihedralForceCompute,
                      ForceCompute,
                      std::shared_ptr<CombinedBTDihedralForceCompute>>(m,
                                                     "CombinedBTDihedralForceCompute")
         .def(pybind11::init<std::shared_ptr<SystemDefinition>>())
-        .def("setParams", &CombinedBTDihedralForceCompute::setParamsPython)
+        .def("setParams", &CombinedBTDihedralForceCompute::setParams)
         .def("getParams", &CombinedBTDihedralForceCompute::getParams);
     }
 

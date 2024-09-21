@@ -93,7 +93,7 @@ class Combined_BT(dihedral.Dihedral):
 
     .. math::
 
-        U(\theta_{i-1},\theta_{i},\phi_{i}) = 
+        U(\theta_{i-1},\theta_{i},\phi_{i}) =
                   k_{\phi} sin^{3}\left(\theta_{i-1}\right) sin^{3}\left(\theta_{i}\right)
                   \[ \sum_{n=0}^{4} a_{n}cos^{n}\left(\phi_{i}\right) = 1 \]
 
@@ -132,7 +132,8 @@ class Combined_BT(dihedral.Dihedral):
         super().__init__()
         # check that some dihedrals are defined
         params = TypeParameter(
-            'params', 'dihedral_types',
+            'params',
+            'dihedral_types',
             TypeParameterDict(k_phi=float,
                               a0=float,
                               a1=float,

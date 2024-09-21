@@ -75,10 +75,7 @@ class PYBIND11_EXPORT CombinedBTDihedralForceCompute : public ForceCompute
     virtual ~CombinedBTDihedralForceCompute();
 
     //! Set the parameters
-    virtual void setParams(unsigned int type, Scalar k_phi, Scalar a0, Scalar a1,
-                                    Scalar a2, Scalar a3, Scalar a4);
-
-    virtual void setParamsPython(std::string type, pybind11::dict params);
+    virtual void setParams(std::string type, pybind11::dict params);
 
     /// Get the parameters for a specified type
     pybind11::dict getParams(std::string type);
