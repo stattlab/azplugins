@@ -8,7 +8,6 @@
 
 #include "CombinedBTDihedralForceComputeGPU.h"
 
-using namespace std;
 
 namespace azplugins
     {
@@ -57,7 +56,7 @@ void CombinedBTDihedralForceComputeGPU::computeForces(uint64_t timestep)
 
     ArrayHandle<Scalar4> d_force(m_force, access_location::device, access_mode::overwrite);
     ArrayHandle<Scalar> d_virial(m_virial, access_location::device, access_mode::overwrite);
-    ArrayHandle<combined_bt_params> d_params(m_params, access_location::device, access_mode::read);
+    ArrayHandle<dihedral_combinedbt_params> d_params(m_params, access_location::device, access_mode::read);
 
     // run the kernel in parallel on all GPUs
     m_tuner->begin();

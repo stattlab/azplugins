@@ -25,9 +25,9 @@ struct combined_bt_params
     combined_bt_params() : k_phi(0.), a0(0.), a1(0.), a2(0.), a3(0.), a4(0.) { }
 
     combined_bt_params(pybind11::dict v)
-        : k_phi(v["k_phi"].cast<Scalar>()), a0(v["a0"].cast<Scalar>()), 
+        : k_phi(v["k_phi"].cast<Scalar>()), a0(v["a0"].cast<Scalar>()),
           a1(v["a1"].cast<Scalar>()), a2(v["a2"].cast<Scalar>()),
-          a3(v["a3"].cast<Scalar>()), a4(v["a0"].cast<Scalar>())
+          a3(v["a3"].cast<Scalar>()), a4(v["a0"].cast<Scalar>()) {};
         // {
         // if (k <= 0)
         //     {

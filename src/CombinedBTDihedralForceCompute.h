@@ -2,7 +2,7 @@
 // Copyright (c) 2021-2024, Auburn University
 // Part of azplugins, released under the BSD 3-Clause License.
 
-#include "CombinedBT.h"
+//#include "CombinedBT.h"
 #include "hoomd/BondedGroupData.h"
 #include "hoomd/ForceCompute.h"
 
@@ -59,7 +59,7 @@ struct dihedral_combinedbt_params
 #endif
     } __attribute__((aligned(32)));
 //! Computes combined bending-torsion proper dihedral forces on each particle
-/*! Combined bending-torsion proper dihedral forces are computed on every particle in 
+/*! Combined bending-torsion proper dihedral forces are computed on every particle in
         the simulation.
 
     The dihedrals which forces are computed on are accessed from ParticleData::getDihedralData
@@ -75,7 +75,7 @@ class PYBIND11_EXPORT CombinedBTDihedralForceCompute : public ForceCompute
     virtual ~CombinedBTDihedralForceCompute();
 
     //! Set the parameters
-    virtual void setParams(unsigned int type, Scalar k_phi, Scalar a0, Scalar a1, 
+    virtual void setParams(unsigned int type, Scalar k_phi, Scalar a0, Scalar a1,
                                     Scalar a2, Scalar a3, Scalar a4);
 
     virtual void setParamsPython(std::string type, pybind11::dict params);
@@ -97,7 +97,7 @@ class PYBIND11_EXPORT CombinedBTDihedralForceCompute : public ForceCompute
 #endif
 
     protected:
-    GPUArray<combined_bt_params> m_params;
+    GPUArray<dihedral_combinedbt_params> m_params;
 
     //!< Dihedral data to use in computing dihedrals
     std::shared_ptr<DihedralData> m_dihedral_data;
