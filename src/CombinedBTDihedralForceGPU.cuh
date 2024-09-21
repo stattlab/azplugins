@@ -10,7 +10,6 @@
 #ifndef AZPLUGINS_COMBINEDBT_DIHEDRAL_GPU_CUH_
 #define AZPLUGINS_COMBINEDBT_DIHEDRAL_GPU_CUH_
 
-#include "CombinedBT.h"
 #include "hoomd/BondedGroupData.cuh"
 #include "hoomd/HOOMDMath.h"
 #include "hoomd/ParticleData.cuh"
@@ -19,21 +18,22 @@ namespace azplugins
     {
 namespace gpu
     {
-//! Kernel driver that computes combined bending-torsion dihedral forces for CombinedBTDihedralForceComputeGPU
+//! Kernel driver that computes combined bending-torsion dihedral forces for
+//! CombinedBTDihedralForceComputeGPU
 hipError_t gpu_compute_combinedBT_dihedral_forces(Scalar4* d_force,
-                                            Scalar* d_virial,
-                                            const size_t virial_pitch,
-                                            const unsigned int N,
-                                            const Scalar4* d_pos,
-                                            const BoxDim& box,
-                                            const group_storage<4>* tlist,
-                                            const unsigned int* dihedral_ABCD,
-                                            const unsigned int pitch,
-                                            const unsigned int* n_dihedrals_list,
-                                            combined_bt_params d_params,
-                                            const unsigned int n_dihedral_types,
-                                            const int block_size,
-                                            const int warp_size);
+                                                  Scalar* d_virial,
+                                                  const size_t virial_pitch,
+                                                  const unsigned int N,
+                                                  const Scalar4* d_pos,
+                                                  const BoxDim& box,
+                                                  const group_storage<4>* tlist,
+                                                  const unsigned int* dihedral_ABCD,
+                                                  const unsigned int pitch,
+                                                  const unsigned int* n_dihedrals_list,
+                                                  combined_bt_params d_params,
+                                                  const unsigned int n_dihedral_types,
+                                                  const int block_size,
+                                                  const int warp_size);
 
     } // end namespace gpu
     } // end namespace azplugins
