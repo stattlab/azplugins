@@ -2,32 +2,32 @@
 // Copyright (c) 2021-2024, Auburn University
 // Part of azplugins, released under the BSD 3-Clause License.
 
-/*! \file CombinedBTDihedralForceComputeGPU.cc
-    \brief Defines CombinedBTDihedralForceComputeGPU
+/*! \file DihedralBendingTorsionForceComputeGPU.cc
+    \brief Defines DihedralBendingTorsionForceComputeGPU
 */
 
-#include "CombinedBTDihedralForceComputeGPU.h"
+#include "DihedralBendingTorsionForceComputeGPU.h"
 
 
 namespace azplugins
     {
 /*! \param sysdef System to compute bond forces on
  */
-CombinedBTDihedralForceComputeGPU::CombinedBTDihedralForceComputeGPU(std::shared_ptr<SystemDefinition> sysdef)
-    : CombinedBTDihedralForceCompute(sysdef)
+DihedralBendingTorsionForceComputeGPU::DihedralBendingTorsionForceComputeGPU(std::shared_ptr<SystemDefinition> sysdef)
+    : DihedralBendingTorsionForceCompute(sysdef)
     {
     // can't run on the GPU if there aren't any GPUs in the execution configuration
     if (!m_exec_conf->isCUDAEnabled())
         {
         m_exec_conf->msg->error()
-            << "Creating an CombinedBTDihedralForceComputeGPU with no GPU in execution configuration"
+            << "Creating an DihedralBendingTorsionForceComputeGPU with no GPU in execution configuration"
             << endl;
-        throw std::runtime_error("Error initializing CombinedBTDihedralForceComputeGPU");
+        throw std::runtime_error("Error initializing DihedralBendingTorsionForceComputeGPU");
         }
 
     m_tuner.reset(new Autotuner<1>({AutotunerBase::makeBlockSizeRange(m_exec_conf)},
                                    m_exec_conf,
-                                   "combinedbt_dihedral"));
+                                   "bending_torsion_dihedral"));
     m_autotuners.push_back(m_tuner);
     }
 
@@ -36,9 +36,9 @@ CombinedBTDihedralForceComputeGPU::CombinedBTDihedralForceComputeGPU(std::shared
 
     \param timestep Current time step of the simulation
 
-    Calls gpu_compute_combinedbt_dihedral_forces to do the dirty work.
+    Calls gpu_compute_bending_torsion_dihedral_forces to do the dirty work.
 */
-void CombinedBTDihedralForceComputeGPU::computeForces(uint64_t timestep)
+void DihedralBendingTorsionForceComputeGPU::computeForces(uint64_t timestep)
     {
     ArrayHandle<DihedralData::members_t> d_gpu_dihedral_list(m_dihedral_data->getGPUTable(),
                                                              access_location::device,
@@ -56,11 +56,11 @@ void CombinedBTDihedralForceComputeGPU::computeForces(uint64_t timestep)
 
     ArrayHandle<Scalar4> d_force(m_force, access_location::device, access_mode::overwrite);
     ArrayHandle<Scalar> d_virial(m_virial, access_location::device, access_mode::overwrite);
-    ArrayHandle<dihedral_combinedbt_params> d_params(m_params, access_location::device, access_mode::read);
+    ArrayHandle<dihedral_bending_torsion_params> d_params(m_params, access_location::device, access_mode::read);
 
     // run the kernel in parallel on all GPUs
     m_tuner->begin();
-    kernel::gpu_compute_combinedbt_dihedral_forces(d_force.data,
+    kernel::gpu_compute_bending_torsion_dihedral_forces(d_force.data,
                                              d_virial.data,
                                              m_virial.getPitch(),
                                              m_pdata->getN(),
@@ -81,11 +81,11 @@ void CombinedBTDihedralForceComputeGPU::computeForces(uint64_t timestep)
 
 namespace detail
     {
-void export_CombinedBTDihedralForceComputeGPU(pybind11::module& m)
+void export_DihedralBendingTorsionForceComputeGPU(pybind11::module& m)
     {
-    pybind11::class_<CombinedBTDihedralForceComputeGPU,
-                     CombinedBTDihedralForceCompute,
-                     std::shared_ptr<CombinedBTDihedralForceComputeGPU>>(m, "CombinedBTDihedralForceComputeGPU")
+    pybind11::class_<DihedralBendingTorsionForceComputeGPU,
+                     DihedralBendingTorsionForceCompute,
+                     std::shared_ptr<DihedralBendingTorsionForceComputeGPU>>(m, "DihedralBendingTorsionForceComputeGPU")
         .def(pybind11::init<std::shared_ptr<SystemDefinition>>());
     }
 

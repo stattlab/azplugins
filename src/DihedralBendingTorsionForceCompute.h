@@ -8,8 +8,8 @@
 #include <memory>
 #include <vector>
 
-/*! \file CombinedBTDihedralForceCompute.h
-    \brief Declares a class for computing CombinedBT dihedrals
+/*! \file DihedralBendingTorsionForceCompute.h
+    \brief Declares a class for computing Bending-Torsion dihedrals
 */
 
 #ifdef __HIPCC__
@@ -18,14 +18,14 @@
 
 #include <pybind11/pybind11.h>
 
-#ifndef AZPLUGINS_COMBINEDBT_DIHEDRAL_FORCE_COMPUTE_H__
-#define AZPLUGINS_COMBINEDBT_DIHEDRAL_FORCE_COMPUTE_H__
+#ifndef AZPLUGINS_DIHEDRAL_BENDING_TORSION_FORCE_COMPUTE_H__
+#define AZPLUGINS_DIHEDRAL_BENDING_TORSION_FORCE_COMPUTE_H__
 
 namespace hoomd
     {
 namespace azplugins
     {
-struct dihedral_combinedbt_params
+struct dihedral_bending_torsion_params
     {
     Scalar k_phi;
     Scalar a0;
@@ -35,9 +35,9 @@ struct dihedral_combinedbt_params
     Scalar a4;
 
 #ifndef __HIPCC__
-    dihedral_combinedbt_params() : k_phi(0.), a0(0.), a1(0.), a2(0.), a3(0.), a4(0.) { }
+    dihedral_bending_torsion_params() : k_phi(0.), a0(0.), a1(0.), a2(0.), a3(0.), a4(0.) { }
 
-    dihedral_combinedbt_params(pybind11::dict v)
+    dihedral_bending_torsion_params(pybind11::dict v)
         : k_phi(v["k_phi"].cast<Scalar>()), a0(v["a0"].cast<Scalar>()),
             a1(v["a1"].cast<Scalar>()), a2(v["a2"].cast<Scalar>()),
             a3(v["a3"].cast<Scalar>()), a4(v["a4"].cast<Scalar>())
@@ -64,14 +64,14 @@ struct dihedral_combinedbt_params
     The dihedrals which forces are computed on are accessed from ParticleData::getDihedralData
     \ingroup computes
 */
-class PYBIND11_EXPORT CombinedBTDihedralForceCompute : public ForceCompute
+class PYBIND11_EXPORT DihedralBendingTorsionForceCompute : public ForceCompute
     {
     public:
     //! Constructs the compute
-    CombinedBTDihedralForceCompute(std::shared_ptr<SystemDefinition> sysdef);
+    DihedralBendingTorsionForceCompute(std::shared_ptr<SystemDefinition> sysdef);
 
     //! Destructor
-    virtual ~CombinedBTDihedralForceCompute();
+    virtual ~DihedralBendingTorsionForceCompute();
 
     //! Set the parameters
     virtual void setParams(std::string type, pybind11::dict params);
@@ -93,7 +93,7 @@ class PYBIND11_EXPORT CombinedBTDihedralForceCompute : public ForceCompute
 #endif
 
     protected:
-    GPUArray<dihedral_combinedbt_params> m_params;
+    GPUArray<dihedral_bending_torsion_params> m_params;
 
     //!< Dihedral data to use in computing dihedrals
     std::shared_ptr<DihedralData> m_dihedral_data;

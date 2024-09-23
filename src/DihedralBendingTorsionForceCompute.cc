@@ -2,7 +2,7 @@
 // Copyright (c) 2021-2024, Auburn University
 // Part of azplugins, released under the BSD 3-Clause License.
 
-#include "CombinedBTDihedralForceCompute.h"
+#include "DihedralBendingTorsionForceCompute.h"
 
 #include <cmath>
 #include <iostream>
@@ -11,8 +11,8 @@
 
 using namespace std;
 
-/*! \file CombinedBTDihedralForceCompute.cc
-    \brief Contains code for the CombinedBTDihedralForceCompute class
+/*! \file DihedralBendingTorsionForceCompute.cc
+    \brief Contains code for the DihedralBendingTorsionForceCompute class
 */
 
 namespace hoomd
@@ -22,10 +22,10 @@ namespace azplugins
 /*! \param sysdef System to compute forces on
     \post Memory is allocated, and forces are zeroed.
 */
-CombinedBTDihedralForceCompute::CombinedBTDihedralForceCompute(std::shared_ptr<SystemDefinition> sysdef)
+DihedralBendingTorsionForceCompute::DihedralBendingTorsionForceCompute(std::shared_ptr<SystemDefinition> sysdef)
     : ForceCompute(sysdef)
     {
-    m_exec_conf->msg->notice(5) << "Constructing CombinedBTDihedralForceCompute" << endl;
+    m_exec_conf->msg->notice(5) << "Constructing DihedralBendingTorsionForceCompute" << endl;
 
     // access the dihedral data for later use
     m_dihedral_data = m_sysdef->getDihedralData();
@@ -37,25 +37,25 @@ CombinedBTDihedralForceCompute::CombinedBTDihedralForceCompute(std::shared_ptr<S
         }
 
     // allocate the parameters
-    GPUArray<dihedral_combinedbt_params> params(m_dihedral_data->getNTypes(), m_exec_conf);
+    GPUArray<dihedral_bending_torsion_params> params(m_dihedral_data->getNTypes(), m_exec_conf);
     m_params.swap(params);
     }
 
-CombinedBTDihedralForceCompute::~CombinedBTDihedralForceCompute()
+DihedralBendingTorsionForceCompute::~DihedralBendingTorsionForceCompute()
     {
-    m_exec_conf->msg->notice(5) << "Destroying CombinedBTDihedralForceCompute" << endl;
+    m_exec_conf->msg->notice(5) << "Destroying DihedralBendingTorsionForceCompute" << endl;
     }
 
 /*! \param type Type of the dihedral to set parameters for
-    \param k_phi Overall Force parameter in CombinedBT-style dihedral
-    \param a0 Force parameter in CombinedBT-style dihedral
-    \param a1 Force parameter in CombinedBT-style dihedral
-    \param a2 Force parameter in CombinedBT-style dihedral
-    \param a3 Force parameter in CombinedBT-style dihedral
-    \param a4 Force parameter in CombinedBT-style dihedral
+    \param k_phi Overall Force parameter in Bending-Torsion-style dihedral
+    \param a0 Force parameter in Bending-Torsion-style dihedral
+    \param a1 Force parameter in Bending-Torsion-style dihedral
+    \param a2 Force parameter in Bending-Torsion-style dihedral
+    \param a3 Force parameter in Bending-Torsion-style dihedral
+    \param a4 Force parameter in Bending-Torsion-style dihedral
 
 */
-// void CombinedBTDihedralForceCompute::setParams(unsigned int type,
+// void DihedralBendingTorsionForceCompute::setParams(unsigned int type,
 //                                          Scalar k_phi,
 //                                          Scalar a0,
 //                                          Scalar a1,
@@ -74,19 +74,19 @@ CombinedBTDihedralForceCompute::~CombinedBTDihedralForceCompute()
 //     h_params.data[type] = make_scalar6(k_phi, a0, a1, a2, a3, a4);
 //     }
 
-void CombinedBTDihedralForceCompute::setParams(std::string type, pybind11::dict params)
+void DihedralBendingTorsionForceCompute::setParams(std::string type, pybind11::dict params)
     {
     // make sure the type is valid
     auto typ = m_dihedral_data->getTypeByName(type);
-    dihedral_combinedbt_params _params(params);
+    dihedral_bending_torsion_params _params(params);
     // setParams(typ, _params.k_phi, _params.a0, _params.a1, _params.a2, _params.a3, _params.a4);
-    ArrayHandle<dihedral_combinedbt_params> h_params(m_params,
+    ArrayHandle<dihedral_bending_torsion_params> h_params(m_params,
                                                    access_location::host,
                                                    access_mode::readwrite);
     h_params.data[typ] = _params;
     }
 
-pybind11::dict CombinedBTDihedralForceCompute::getParams(std::string type)
+pybind11::dict DihedralBendingTorsionForceCompute::getParams(std::string type)
     {
     auto typ = m_dihedral_data->getTypeByName(type);
     // // make sure the type is valid
@@ -102,7 +102,7 @@ pybind11::dict CombinedBTDihedralForceCompute::getParams(std::string type)
     // params["k2"] = val.y * 2;
     // params["k3"] = val.z * 2;
     // params["k4"] = val.w * 2;
-    ArrayHandle<dihedral_combinedbt_params> h_params(m_params,
+    ArrayHandle<dihedral_bending_torsion_params> h_params(m_params,
                                                    access_location::host,
                                                    access_mode::read);
     // return params;
@@ -112,7 +112,7 @@ pybind11::dict CombinedBTDihedralForceCompute::getParams(std::string type)
 /*! Actually perform the force computation
     \param timestep Current time step
  */
-void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
+void DihedralBendingTorsionForceCompute::computeForces(uint64_t timestep)
     {
     assert(m_pdata);
     // access the particle data arrays
@@ -124,7 +124,7 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
     ArrayHandle<Scalar> h_virial(m_virial, access_location::host, access_mode::overwrite);
 
     // access parameter data
-    ArrayHandle<dihedral_combinedbt_params> h_params(m_params, access_location::host,
+    ArrayHandle<dihedral_bending_torsion_params> h_params(m_params, access_location::host,
                                             access_mode::read);
 
     // Zero data for force calculation before computation
@@ -180,7 +180,7 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
         if (i1 == NOT_LOCAL || i2 == NOT_LOCAL || i3 == NOT_LOCAL || i4 == NOT_LOCAL)
             {
             this->m_exec_conf->msg->error()
-                << "dihedral.combinedbt: dihedral " << dihedral.tag[0] << " " << dihedral.tag[1] << " "
+                << "dihedral.BendingTorsion: dihedral " << dihedral.tag[0] << " " << dihedral.tag[1] << " "
                 << dihedral.tag[2] << " " << dihedral.tag[3] << " incomplete." << endl
                 << endl;
             throw std::runtime_error("Error in dihedral calculation");
@@ -345,15 +345,15 @@ void CombinedBTDihedralForceCompute::computeForces(uint64_t timestep)
 
 namespace detail
     {
-void export_CombinedBTDihedralForceCompute(pybind11::module& m)
+void export_DihedralBendingTorsionForceCompute(pybind11::module& m)
     {
-    pybind11::class_<CombinedBTDihedralForceCompute,
+    pybind11::class_<DihedralBendingTorsionForceCompute,
                      ForceCompute,
-                     std::shared_ptr<CombinedBTDihedralForceCompute>>(m,
-                                                    "CombinedBTDihedralForceCompute")
+                     std::shared_ptr<DihedralBendingTorsionForceCompute>>(m,
+                                                    "DihedralBendingTorsionForceCompute")
         .def(pybind11::init<std::shared_ptr<SystemDefinition>>())
-        .def("setParams", &CombinedBTDihedralForceCompute::setParams)
-        .def("getParams", &CombinedBTDihedralForceCompute::getParams);
+        .def("setParams", &DihedralBendingTorsionForceCompute::setParams)
+        .def("getParams", &DihedralBendingTorsionForceCompute::getParams);
     }
 
     } // end namespace detail

@@ -3,14 +3,14 @@
 // Part of azplugins, released under the BSD 3-Clause License.
 
 #include "hip/hip_runtime.h"
-#include "CombinedBTDihedralForceGPU.cuh"
+#include "DihedralBendingTorsionForceGPU.cuh"
 #include "hoomd/TextureTools.h"
 
 #include <assert.h>
 
-/*! \file CombinedBTDihedralForceGPU.cu
-    \brief Defines GPU kernel code for calculating CombinedBT dihedral forces. Used by
-   CombinedBTDihedralForceComputeGPU.
+/*! \file DihedralBendingTorsionForceGPU.cu
+    \brief Defines GPU kernel code for calculating Bending-Torsion dihedral forces. Used by
+   DihedralBendingTorsionForceComputeGPU.
 */
 
 namespace azplugins
@@ -30,12 +30,12 @@ namespace gpu
     \param pitch Pitch of 2D dihedral list
     \param n_dihedrals_list List of numbers of dihedrals per atom
 */
-__global__ void gpu_compute_combinedbt_dihedral_forces_kernel(Scalar4* d_force,
+__global__ void gpu_compute_bending_torsion_dihedral_forces_kernel(Scalar4* d_force,
                                                         Scalar* d_virial,
                                                         const size_t virial_pitch,
                                                         const unsigned int N,
                                                         const Scalar4* d_pos,
-                                                        const combined_bt_params d_params,
+                                                        const dihedral_bending_torsion_params d_params,
                                                         BoxDim box,
                                                         const group_storage<4>* tlist,
                                                         const unsigned int* dihedral_ABCD,
@@ -165,7 +165,7 @@ __global__ void gpu_compute_combinedbt_dihedral_forces_kernel(Scalar4* d_force,
 
         // get values for k1/2 through k4/2 (MEM TRANSFER: 16 bytes)
         // ----- The 1/2 factor is already stored in the parameters --------
-        combined_bt_params params = __ldg(d_params + cur_dihedral_type);
+        bending_torsion_params params = __ldg(d_params + cur_dihedral_type);
         Scalar k1 = params.x;
         Scalar k2 = params.y;
         Scalar k3 = params.z;
@@ -315,7 +315,7 @@ __global__ void gpu_compute_combinedbt_dihedral_forces_kernel(Scalar4* d_force,
     \a d_params should include one Scalar4 element per dihedral type. The x component contains K the
    spring constant and the y component contains sign, and the z component the multiplicity.
 */
-hipError_t gpu_compute_combinedBT_dihedral_forces(Scalar4* d_force,
+hipError_t gpu_compute_bending_torsion_dihedral_forces(Scalar4* d_force,
                                             Scalar* d_virial,
                                             const size_t virial_pitch,
                                             const unsigned int N,
@@ -325,7 +325,7 @@ hipError_t gpu_compute_combinedBT_dihedral_forces(Scalar4* d_force,
                                             const unsigned int* dihedral_ABCD,
                                             const unsigned int pitch,
                                             const unsigned int* n_dihedrals_list,
-                                            dihedral_combinedbt_params d_params,
+                                            dihedral_bending_torsion_params d_params,
                                             const unsigned int n_dihedral_types,
                                             const int block_size,
                                             const int warp_size)
@@ -334,7 +334,7 @@ hipError_t gpu_compute_combinedBT_dihedral_forces(Scalar4* d_force,
 
     unsigned int max_block_size;
     hipFuncAttributes attr;
-    hipFuncGetAttributes(&attr, (const void*)gpu_compute_combinedbt_dihedral_forces_kernel);
+    hipFuncGetAttributes(&attr, (const void*)gpu_compute_bending_torsion_dihedral_forces_kernel);
     max_block_size = attr.maxThreadsPerBlock;
     if (max_block_size % warp_size)
         // handle non-sensical return values from hipFuncGetAttributes
@@ -347,7 +347,7 @@ hipError_t gpu_compute_combinedBT_dihedral_forces(Scalar4* d_force,
     dim3 threads(run_block_size, 1, 1);
 
     // run the kernel
-    hipLaunchKernelGGL((gpu_compute_combinedbt_dihedral_forces_kernel),
+    hipLaunchKernelGGL((gpu_compute_bending_torsion_dihedral_forces_kernel),
                        dim3(grid),
                        dim3(threads),
                        0,
