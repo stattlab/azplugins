@@ -325,7 +325,7 @@ hipError_t gpu_compute_combinedBT_dihedral_forces(Scalar4* d_force,
                                             const unsigned int* dihedral_ABCD,
                                             const unsigned int pitch,
                                             const unsigned int* n_dihedrals_list,
-                                            const Scalar4* d_params,
+                                            dihedral_combinedbt_params d_params,
                                             const unsigned int n_dihedral_types,
                                             const int block_size,
                                             const int warp_size)
