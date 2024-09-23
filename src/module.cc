@@ -114,6 +114,9 @@ PYBIND11_MODULE(_azplugins, m)
     // dpd pair
     export_PotentialPairDPDThermoGeneralWeight(m);
 
+    // dihedral
+    export_DihedralBendingTorsionForceCompute(m);
+
 #ifdef ENABLE_HIP
     // bond
     export_PotentialBondDoubleWellGPU(m);
@@ -127,6 +130,9 @@ PYBIND11_MODULE(_azplugins, m)
 
     // dpd pair
     export_PotentialPairDPDThermoGeneralWeightGPU(m);
+
+    // dihedral
+    export_DihedralBendingTorsionForceComputeGPU(m);
 
 #endif // ENABLE_HIP
     }
