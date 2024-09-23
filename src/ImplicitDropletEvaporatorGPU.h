@@ -38,7 +38,7 @@ class PYBIND11_EXPORT ImplicitDropletEvaporatorGPU : public ImplicitEvaporatorGP
 namespace detail
     {
 //! Exports the ImplicitDropletEvaporatorGPU to python
-void export_CombinedDihedralForceComputeGPU(pybind11::module& m);
+void export_ImplicitDropletEvaporatorGPU(pybind11::module& m);
     } // end namespace detail
 
     } // end namespace azplugins
