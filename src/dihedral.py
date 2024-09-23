@@ -119,14 +119,17 @@ class Combined_BT(dihedral.Dihedral):
             * ``a3`` (`float`, **required**) -  force constant of the
               fourth term :math:`[\mathrm{energy}]`
 
+            * ``a4`` (`float`, **required**) -  force constant of the
+              fifth term :math:`[\mathrm{energy}]`
+
     Examples::
 
-        combined_bt = azplugins.dihedral.Combined_BT()
-        opls.params['A-A-A-A'] = dict(k_phi=1.0, a0=1.0, a1=-1.0, a2=1.0, a3=1.0)
+        bending_torsion = azplugins.dihedral.BendingTorsion()
+        bending_torsion.params['A-A-A-A'] = dict(k_phi=1.0, a0=1.0, a1=-1.0, a2=1.0, a3=1.0)
     """
 
     _ext_module = _azplugins
-    _cpp_class_name = "Combined_BTDihedralForceCompute"
+    _cpp_class_name = "DihedralBendingTorsionForceCompute"
 
     def __init__(self):
         super().__init__()
@@ -139,5 +142,6 @@ class Combined_BT(dihedral.Dihedral):
                               a1=float,
                               a2=float,
                               a3=float,
+                              a4=float,
                               len_keys=1))
         self._add_typeparam(params)
