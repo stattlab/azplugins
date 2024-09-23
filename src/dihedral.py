@@ -85,10 +85,10 @@ class Dihedral(Force):
         self._cpp_obj = cpp_class(self._simulation.state._cpp_sys_def)
 '''
 
-class Combined_BT(dihedral.Dihedral):
+class BendingTorsion(dihedral.Dihedral):
     r"""Combined bending-torsion proper dihedral force.
 
-    `Combined_BT` computes forces, virials, and energies on all dihedrals in the
+    `BendingTorsion` computes forces, virials, and energies on all dihedrals in the
     simulation state with:
 
     .. math::
@@ -101,7 +101,7 @@ class Combined_BT(dihedral.Dihedral):
 
     Attributes:
         params (`TypeParameter` [``dihedral type``, `dict`]):
-            The parameter of the Combined_BT dihedrals for each particle type.
+            The parameter of the Bending-Torsion dihedrals for each particle type.
             The dictionary has the following keys:
 
             * ``k_phi`` (`float`, **required**) -  force constant of the

@@ -7,18 +7,18 @@ set(_${COMPONENT_NAME}_sources
     GroupVelocityCompute.cc
     module.cc
     ParabolicFlow.cc
-    CombinedBTDihedralForceCompute.cc
+    DihedralBendingTorsionForceCompute.cc
     )
     
 if (ENABLE_HIP)
 list(APPEND _${COMPONENT_NAME}_sources
-    CombinedBTDihedralForceComputeCPU.cc
+    DihedralBendingTorsionForceComputeCPU.cc
     )
 endif()
 
 # TODO: List all GPU C++ source code files in _${COMPONENT_NAME}_cu_sources.
 set(_${COMPONENT_NAME}_cu_sources
-    CombinedBTDihedralForceGPU.cu
+    DihedralBendingTorsionForceGPU.cu
     )
 
 # TODO: List all Python modules in python_files.
