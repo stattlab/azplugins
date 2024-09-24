@@ -2,7 +2,6 @@
 // Copyright (c) 2021-2024, Auburn University
 // Part of azplugins, released under the BSD 3-Clause License.
 
-#include "hip/hip_runtime.h"
 #include "DihedralBendingTorsionForceGPU.cuh"
 #include "hoomd/TextureTools.h"
 
@@ -13,6 +12,8 @@
    DihedralBendingTorsionForceComputeGPU.
 */
 
+namespace hoomd
+    {
 namespace azplugins
     {
 namespace gpu
@@ -35,7 +36,7 @@ __global__ void gpu_compute_bending_torsion_dihedral_forces_kernel(Scalar4* d_fo
                                                         const size_t virial_pitch,
                                                         const unsigned int N,
                                                         const Scalar4* d_pos,
-                                                        const dihedral_bending_torsion_params d_params,
+                                                        const dihedral_bending_torsion_params* d_params,
                                                         BoxDim box,
                                                         const group_storage<4>* tlist,
                                                         const unsigned int* dihedral_ABCD,
@@ -165,92 +166,87 @@ __global__ void gpu_compute_bending_torsion_dihedral_forces_kernel(Scalar4* d_fo
 
         // get values for k1/2 through k4/2 (MEM TRANSFER: 16 bytes)
         // ----- The 1/2 factor is already stored in the parameters --------
-        bending_torsion_params params = __ldg(d_params + cur_dihedral_type);
-        Scalar k1 = params.x;
-        Scalar k2 = params.y;
-        Scalar k3 = params.z;
-        Scalar k4 = params.w;
+        /**
+         * 
+        dihedral_bending_torsion_params params = __ldg(d_params + cur_dihedral_type);
+        Scalar k_phi = h_params.data[dihedral_type].k_phi;
+        Scalar a0 = h_params.data[dihedral_type].a0;
+        Scalar a1 = h_params.data[dihedral_type].a1;
+        Scalar a2 = h_params.data[dihedral_type].a2;
+        Scalar a3 = h_params.data[dihedral_type].a3;
+        Scalar a4 = h_params.data[dihedral_type].a4;
+         */
+        dihedral_bending_torsion_params params = d_params[cur_dihedral_type];
+        Scalar k_phi = params.k_phi;
+        Scalar a0 = params.a0;
+        Scalar a1 = params.a1;
+        Scalar a2 = params.a2;
+        Scalar a3 = params.a3;
+        Scalar a4 = params.a4;
 
-        // calculate the potential p = sum (i=1,4) k_i * (1 + (-1)**(i+1)*cos(i*phi) )
-        // and df = dp/dc
+        /**
 
-        // cos(phi) term
-        Scalar ddf1 = c;
-        Scalar df1 = s;
-        Scalar cos_term = ddf1;
+        fg = vb1.x * vb2m.x + vb1.y * vb2m.y + vb1.z * vb2m.z;
+        hg = vb3.x * vb2m.x + vb3.y * vb2m.y + vb3.z * vb2m.z;
+        fga = fg * ra2inv * rginv;
+        hgb = hg * rb2inv * rginv;
+        gaa = -ra2inv * rg;
+        gbb = rb2inv * rg;
 
-        Scalar p = k1 * (1.0 + cos_term);
-        Scalar df = k1 * df1;
+        dtfx = gaa * ax;
+        dtfy = gaa * ay;
+        dtfz = gaa * az;
+        dtgx = fga * ax - hgb * bx;
+        dtgy = fga * ay - hgb * by;
+        dtgz = fga * az - hgb * bz;
+        dthx = gbb * bx;
+        dthy = gbb * by;
+        dthz = gbb * bz;
 
-        // cos(2*phi) term
-        ddf1 = cos_term * c - df1 * s;
-        df1 = cos_term * s + df1 * c;
-        cos_term = ddf1;
+        sx2 = df * dtgx;
+        sy2 = df * dtgy;
+        sz2 = df * dtgz;
 
-        p += k2 * (1.0 - cos_term);
-        df += -2.0 * k2 * df1;
-
-        // cos(3*phi) term
-        ddf1 = cos_term * c - df1 * s;
-        df1 = cos_term * s + df1 * c;
-        cos_term = ddf1;
-
-        p += k3 * (1.0 + cos_term);
-        df += 3.0 * k3 * df1;
-
-        // cos(4*phi) term
-        ddf1 = cos_term * c - df1 * s;
-        df1 = cos_term * s + df1 * c;
-        cos_term = ddf1;
-
-        p += k4 * (1.0 - cos_term);
-        df += -4.0 * k4 * df1;
-
-        // Compute 1/4 of energy to assign to each of 4 atoms in the dihedral
-        Scalar e_dihedral = 0.25 * p;
-
-        Scalar fg = vb1.x * vb2m.x + vb1.y * vb2m.y + vb1.z * vb2m.z;
-        Scalar hg = vb3.x * vb2m.x + vb3.y * vb2m.y + vb3.z * vb2m.z;
-        Scalar fga = fg * ra2inv * rginv;
-        Scalar hgb = hg * rb2inv * rginv;
-        Scalar gaa = -ra2inv * rg;
-        Scalar gbb = rb2inv * rg;
-
-        Scalar dtfx = gaa * ax;
-        Scalar dtfy = gaa * ay;
-        Scalar dtfz = gaa * az;
-        Scalar dtgx = fga * ax - hgb * bx;
-        Scalar dtgy = fga * ay - hgb * by;
-        Scalar dtgz = fga * az - hgb * bz;
-        Scalar dthx = gbb * bx;
-        Scalar dthy = gbb * by;
-        Scalar dthz = gbb * bz;
-
-        Scalar sx2 = df * dtgx;
-        Scalar sy2 = df * dtgy;
-        Scalar sz2 = df * dtgz;
-
-        Scalar3 f1, f2, f3, f4;
         f1.x = df * dtfx;
         f1.y = df * dtfy;
         f1.z = df * dtfz;
+        f1.w = e_dihedral;
 
         f2.x = sx2 - f1.x;
         f2.y = sy2 - f1.y;
         f2.z = sz2 - f1.z;
+        f2.w = e_dihedral;
 
         f4.x = df * dthx;
         f4.y = df * dthy;
         f4.z = df * dthz;
+        f4.w = e_dihedral;
 
         f3.x = -sx2 - f4.x;
         f3.y = -sy2 - f4.y;
         f3.z = -sz2 - f4.z;
+        f3.w = e_dihedral;
+
+        // Apply force to each of the 4 atoms
+        h_force.data[i1].x = h_force.data[i1].x + f1.x;
+        h_force.data[i1].y = h_force.data[i1].y + f1.y;
+        h_force.data[i1].z = h_force.data[i1].z + f1.z;
+        h_force.data[i1].w = h_force.data[i1].w + f1.w;
+        h_force.data[i2].x = h_force.data[i2].x + f2.x;
+        h_force.data[i2].y = h_force.data[i2].y + f2.y;
+        h_force.data[i2].z = h_force.data[i2].z + f2.z;
+        h_force.data[i2].w = h_force.data[i2].w + f2.w;
+        h_force.data[i3].x = h_force.data[i3].x + f3.x;
+        h_force.data[i3].y = h_force.data[i3].y + f3.y;
+        h_force.data[i3].z = h_force.data[i3].z + f3.z;
+        h_force.data[i3].w = h_force.data[i3].w + f3.w;
+        h_force.data[i4].x = h_force.data[i4].x + f4.x;
+        h_force.data[i4].y = h_force.data[i4].y + f4.y;
+        h_force.data[i4].z = h_force.data[i4].z + f4.z;
+        h_force.data[i4].w = h_force.data[i4].w + f4.w;
 
         // Compute 1/4 of the virial, 1/4 for each atom in the dihedral
         // upper triangular version of virial tensor
-
-        Scalar dihedral_virial[6];
         dihedral_virial[0] = 0.25 * (vb1.x * f1.x + vb2.x * f3.x + (vb3.x + vb2.x) * f4.x);
         dihedral_virial[1] = 0.25 * (vb1.y * f1.x + vb2.y * f3.x + (vb3.y + vb2.y) * f4.x);
         dihedral_virial[2] = 0.25 * (vb1.z * f1.x + vb2.z * f3.x + (vb3.z + vb2.z) * f4.x);
@@ -258,40 +254,20 @@ __global__ void gpu_compute_bending_torsion_dihedral_forces_kernel(Scalar4* d_fo
         dihedral_virial[4] = 0.25 * (vb1.z * f1.y + vb2.z * f3.y + (vb3.z + vb2.z) * f4.y);
         dihedral_virial[5] = 0.25 * (vb1.z * f1.z + vb2.z * f3.z + (vb3.z + vb2.z) * f4.z);
 
-        if (cur_dihedral_abcd == 0)
-            {
-            force_idx.x += f1.x;
-            force_idx.y += f1.y;
-            force_idx.z += f1.z;
-            }
-        if (cur_dihedral_abcd == 1)
-            {
-            force_idx.x += f2.x;
-            force_idx.y += f2.y;
-            force_idx.z += f2.z;
-            }
-        if (cur_dihedral_abcd == 2)
-            {
-            force_idx.x += f3.x;
-            force_idx.y += f3.y;
-            force_idx.z += f3.z;
-            }
-        if (cur_dihedral_abcd == 3)
-            {
-            force_idx.x += f4.x;
-            force_idx.y += f4.y;
-            force_idx.z += f4.z;
-            }
-        force_idx.w += e_dihedral;
-
         for (int k = 0; k < 6; k++)
-            virial_idx[k] += dihedral_virial[k];
+            {
+            h_virial.data[virial_pitch * k + i1] += dihedral_virial[k];
+            h_virial.data[virial_pitch * k + i2] += dihedral_virial[k];
+            h_virial.data[virial_pitch * k + i3] += dihedral_virial[k];
+            h_virial.data[virial_pitch * k + i4] += dihedral_virial[k];
+            }
+        */
         }
 
-    // now that the force calculation is complete, write out the result (MEM TRANSFER: 20 bytes)
-    d_force[idx] = force_idx;
-    for (int k = 0; k < 6; k++)
-        d_virial[k * virial_pitch + idx] = virial_idx[k];
+    // // now that the force calculation is complete, write out the result (MEM TRANSFER: 20 bytes)
+    // d_force[idx] = force_idx;
+    // for (int k = 0; k < 6; k++)
+    //     d_virial[k * virial_pitch + idx] = virial_idx[k];
     }
 
 /*! \param d_force Device memory to write computed forces
@@ -325,7 +301,7 @@ hipError_t gpu_compute_bending_torsion_dihedral_forces(Scalar4* d_force,
                                             const unsigned int* dihedral_ABCD,
                                             const unsigned int pitch,
                                             const unsigned int* n_dihedrals_list,
-                                            dihedral_bending_torsion_params d_params,
+                                            dihedral_bending_torsion_params* d_params,
                                             const unsigned int n_dihedral_types,
                                             const int block_size,
                                             const int warp_size)
@@ -369,3 +345,4 @@ hipError_t gpu_compute_bending_torsion_dihedral_forces(Scalar4* d_force,
 
     } // end namespace gpu
     } // end namespace azplugins
+    } // end namespace hoomd

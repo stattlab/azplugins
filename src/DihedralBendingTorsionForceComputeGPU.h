@@ -19,6 +19,8 @@
 #ifndef AZPLUGINS_DIHEDRAL_BENDING_TORSION_FORCE_COMPUTE_GPU_H__
 #define AZPLUGINS_DIHEDRAL_BENDING_TORSION_FORCE_COMPUTE_GPU_H__
 
+namespace hoomd
+    {
 namespace azplugins
     {
 //! Computes combined bending-torsion-style dihedral potentials on the GPU
@@ -43,5 +45,6 @@ class PYBIND11_EXPORT DihedralBendingTorsionForceComputeGPU : public DihedralBen
     };
 
     } // end namespace azplugins
+    } // end namespace hoomd
 
 #endif

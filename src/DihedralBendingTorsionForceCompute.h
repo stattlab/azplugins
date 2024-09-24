@@ -2,6 +2,7 @@
 // Copyright (c) 2021-2024, Auburn University
 // Part of azplugins, released under the BSD 3-Clause License.
 
+#include "DihedralBendingTorsion.h"
 #include "hoomd/BondedGroupData.h"
 #include "hoomd/ForceCompute.h"
 
@@ -25,6 +26,8 @@ namespace hoomd
     {
 namespace azplugins
     {
+/**
+ * 
 struct dihedral_bending_torsion_params
     {
     Scalar k_phi;
@@ -57,6 +60,7 @@ struct dihedral_bending_torsion_params
         }
 #endif
     } __attribute__((aligned(32)));
+ */
 //! Computes combined bending-torsion proper dihedral forces on each particle
 /*! Combined bending-torsion proper dihedral forces are computed on every particle in
         the simulation.

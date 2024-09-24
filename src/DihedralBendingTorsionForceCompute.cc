@@ -55,31 +55,11 @@ DihedralBendingTorsionForceCompute::~DihedralBendingTorsionForceCompute()
     \param a4 Force parameter in Bending-Torsion-style dihedral
 
 */
-// void DihedralBendingTorsionForceCompute::setParams(unsigned int type,
-//                                          Scalar k_phi,
-//                                          Scalar a0,
-//                                          Scalar a1,
-//                                          Scalar a2,
-//                                          Scalar a3,
-//                                          Scalar a4)
-//     {
-//     // make sure the type is valid
-//     if (type >= m_dihedral_data->getNTypes())
-//         {
-//         throw runtime_error("Invalid dihedral type.");
-//         }
-
-//     // set parameters in m_params
-//     ArrayHandle<Scalar6> h_params(m_params, access_location::host, access_mode::readwrite);
-//     h_params.data[type] = make_scalar6(k_phi, a0, a1, a2, a3, a4);
-//     }
-
 void DihedralBendingTorsionForceCompute::setParams(std::string type, pybind11::dict params)
     {
     // make sure the type is valid
     auto typ = m_dihedral_data->getTypeByName(type);
     dihedral_bending_torsion_params _params(params);
-    // setParams(typ, _params.k_phi, _params.a0, _params.a1, _params.a2, _params.a3, _params.a4);
     ArrayHandle<dihedral_bending_torsion_params> h_params(m_params,
                                                    access_location::host,
                                                    access_mode::readwrite);

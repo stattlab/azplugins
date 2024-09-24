@@ -10,10 +10,14 @@
 #ifndef AZPLUGINS_DIHEDRAL_BENDING_TORSION_GPU_CUH_
 #define AZPLUGINS_DIHEDRAL_BENDING_TORSION_GPU_CUH_
 
+#include "DihedralBendingTorsion.h"
+#include "hip/hip_runtime.h"
 #include "hoomd/BondedGroupData.cuh"
 #include "hoomd/HOOMDMath.h"
 #include "hoomd/ParticleData.cuh"
 
+namespace hoomd
+    {
 namespace azplugins
     {
 namespace gpu
@@ -30,12 +34,13 @@ hipError_t gpu_compute_bending_torsion_dihedral_forces(Scalar4* d_force,
                                                   const unsigned int* dihedral_ABCD,
                                                   const unsigned int pitch,
                                                   const unsigned int* n_dihedrals_list,
-                                                  dihedral_bending_torsion_params d_params,
+                                                  dihedral_bending_torsion_params* d_params,
                                                   const unsigned int n_dihedral_types,
                                                   const int block_size,
                                                   const int warp_size);
 
     } // end namespace gpu
     } // end namespace azplugins
+    } // end namespace hoomd
 
 #endif

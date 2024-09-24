@@ -12,13 +12,17 @@ set(_${COMPONENT_NAME}_sources
     
 if (ENABLE_HIP)
 list(APPEND _${COMPONENT_NAME}_sources
-    DihedralBendingTorsionForceComputeCPU.cc
+    DihedralBendingTorsionForceComputeGPU.cc
     )
 endif()
 
 # TODO: List all GPU C++ source code files in _${COMPONENT_NAME}_cu_sources.
 set(_${COMPONENT_NAME}_cu_sources
     DihedralBendingTorsionForceGPU.cu
+    )
+
+set(_${COMPONENT_NAME}_headers
+    DihedralBendingTorsion.h
     )
 
 # TODO: List all Python modules in python_files.
@@ -134,7 +138,7 @@ if (ENABLE_HIP)
 set(_cuda_sources ${_${COMPONENT_NAME}_cu_sources})
 endif (ENABLE_HIP)
 
-hoomd_add_module(_${COMPONENT_NAME} SHARED ${_${COMPONENT_NAME}_sources} ${_cuda_sources} NO_EXTRAS)
+hoomd_add_module(_${COMPONENT_NAME} SHARED ${_${COMPONENT_NAME}_sources} ${_cuda_sources} ${_${COMPONENT_NAME}_headers} NO_EXTRAS)
 # Alias into the HOOMD namespace so that external and symlinked components both work.
 add_library(HOOMD::_${COMPONENT_NAME} ALIAS _${COMPONENT_NAME})
 
@@ -167,6 +171,11 @@ install(FILES ${python_files}
 
 # Copy the Python package to the build directory.
 copy_files_to_build("${python_files}" "hoomd-component-${COMPONENT_NAME}" "*.py")
+
+# install headers in installation target
+install(FILES ${_${COMPONENT_NAME}_headers}
+        DESTINATION ${PYTHON_SITE_INSTALL_DIR}/include/hoomd/${COMPONENT_NAME}
+       )
 
 # Python tests.
 add_subdirectory(pytest)

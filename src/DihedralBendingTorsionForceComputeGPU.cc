@@ -8,7 +8,10 @@
 
 #include "DihedralBendingTorsionForceComputeGPU.h"
 
+using namespace std;
 
+namespace hoomd
+    {
 namespace azplugins
     {
 /*! \param sysdef System to compute bond forces on
@@ -60,7 +63,7 @@ void DihedralBendingTorsionForceComputeGPU::computeForces(uint64_t timestep)
 
     // run the kernel in parallel on all GPUs
     m_tuner->begin();
-    kernel::gpu_compute_bending_torsion_dihedral_forces(d_force.data,
+    gpu::gpu_compute_bending_torsion_dihedral_forces(d_force.data,
                                              d_virial.data,
                                              m_virial.getPitch(),
                                              m_pdata->getN(),
@@ -91,3 +94,4 @@ void export_DihedralBendingTorsionForceComputeGPU(pybind11::module& m)
 
     } // end namespace detail
     } // end namespace azplugins
+    } // end namespace hoomd
