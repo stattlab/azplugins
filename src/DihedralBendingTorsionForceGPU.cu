@@ -117,9 +117,27 @@ __global__ void gpu_compute_bending_torsion_dihedral_forces_kernel(Scalar4* d_fo
             pos_c = z_pos;
             }
 
-        // the three bonds
+        // get the dihedral parameters according to the type
+        dihedral_bending_torsion_params params = d_params[cur_dihedral_type];
+        Scalar k_phi = params.k_phi;
+        Scalar a0 = params.a0;
+        Scalar a1 = params.a1;
+        Scalar a2 = params.a2;
+        Scalar a3 = params.a3;
+        Scalar a4 = params.a4;
+        /**
+        dihedral_type = m_dihedral_data->getTypeByIndex(n);
+        const dihedral_bending_torsion_params& param = h_params.data[dihedral_type];
+        k_phi = param.k_phi;
+        a0 = param.a0;
+        a1 = param.a1;
+        a2 = param.a2;
+        a3 = param.a3;
+        a4 = param.a4;
+         */
 
-        Scalar3 vb1 = pos_a - pos_b;
+        // the three bonds
+        Scalar3 vb1 = pos_b - pos_a;
         Scalar3 vb2 = pos_c - pos_b;
         Scalar3 vb3 = pos_d - pos_c;
 
@@ -128,146 +146,166 @@ __global__ void gpu_compute_bending_torsion_dihedral_forces_kernel(Scalar4* d_fo
         vb2 = box.minImage(vb2);
         vb3 = box.minImage(vb3);
 
-        Scalar3 vb2m = -vb2;
-        vb2m = box.minImage(vb2m);
+        // simplifiers
+        Scalar C11 = vb1.x * vb1.x + vb1.y * vb1.y + vb1.z * vb1.z;
+        Scalar C12 = vb1.x * vb2.x + vb1.y * vb2.y + vb1.z * vb2.z;
+        Scalar C22 = vb2.x * vb2.x + vb2.y * vb2.y + vb2.z * vb2.z;
+        Scalar C23 = vb2.x * vb3.x + vb2.y * vb3.y + vb2.z * vb3.z;
+        Scalar C33 = vb3.x * vb3.x + vb3.y * vb3.y + vb3.z * vb3.z;
+        Scalar C13 = vb1.x * vb3.x + vb1.y * vb3.y + vb1.z * vb3.z;
+        Scalar D12 = C11*C22-C12*C12;
+        Scalar D23 = C22*C33-C23*C23;
+        // to speed up computation
+        Scalar root_D12D23_inv = 1/sqrt(D12*D23);
+        Scalar root_C11C22_inv = 1/sqrt(C11*C22);
+        Scalar root_C22C33_inv = 1/sqrt(C22*C33);
 
-        // c,s calculation
+        // cosines of angles
+        Scalar cos_theta_012 = C12/sqrt(C22*C11); //a=2
+        Scalar cos_theta_123 = C23/sqrt(C33*C22); //a=3
+        Scalar theta_012 = acos(cos_theta_012);
+        Scalar theta_123 = acos(cos_theta_123);
+        Scalar sin_theta_012 = sin(theta_012);
+        Scalar sin_theta_123 = sin(theta_123);
+        // cosine of dihedral
+        // cos_phi_0123 = -(C23*C12-C13*C22)/sqrt(D23*D12);  //a = 3
+        Scalar cos_phi_0123 = -(C23*C12-C13*C22)*root_D12D23_inv;  //a = 3
 
-        Scalar ax, ay, az, bx, by, bz;
-        ax = vb1.y * vb2m.z - vb1.z * vb2m.y;
-        ay = vb1.z * vb2m.x - vb1.x * vb2m.z;
-        az = vb1.x * vb2m.y - vb1.y * vb2m.x;
-        bx = vb3.y * vb2m.z - vb3.z * vb2m.y;
-        by = vb3.z * vb2m.x - vb3.x * vb2m.z;
-        bz = vb3.x * vb2m.y - vb3.y * vb2m.x;
+        // common partial derivatives
+        Scalar prefactor = k_phi*sin_theta_012*sin_theta_012*sin_theta_012*sin_theta_123*sin_theta_123*sin_theta_123;
+        Scalar torsion_e = a0 + a1*cos_phi_0123 + a2*cos_phi_0123*cos_phi_0123 + a3*cos_phi_0123*cos_phi_0123*cos_phi_0123 + a4*cos_phi_0123*cos_phi_0123*cos_phi_0123*cos_phi_0123;
+        Scalar dV_dtheta012 = prefactor*3*cos_theta_012/sin_theta_012*torsion_e;
+        Scalar dV_dtheta123 = prefactor*3*cos_theta_123/sin_theta_123*torsion_e;
+        Scalar dV_dcosphi0123 = prefactor*(torsion_e-a0)/cos_phi_0123;
 
-        Scalar rasq = ax * ax + ay * ay + az * az;
-        Scalar rbsq = bx * bx + by * by + bz * bz;
-        Scalar rgsq = vb2m.x * vb2m.x + vb2m.y * vb2m.y + vb2m.z * vb2m.z;
-        Scalar rg = fast::sqrt(rgsq);
+        Scalar dtheta012_dcostheta012 = -1/sin_theta_012;
+        Scalar dtheta123_dcostheta123 = -1/sin_theta_123;
 
-        Scalar rginv, ra2inv, rb2inv;
-        rginv = ra2inv = rb2inv = 0.0;
-        if (rg > 0)
-            rginv = 1.0 / rg;
-        if (rasq > 0)
-            ra2inv = 1.0 / rasq;
-        if (rbsq > 0)
-            rb2inv = 1.0 / rbsq;
-        Scalar rabinv = fast::sqrt(ra2inv * rb2inv);
+        //Force on particle 0
+        //angle. a = 0, acting on theta_a+2
+        dcostheta012_dr0 = root_C11C22_inv*((C12/C11)*vb1-vb2);
+        F0_theta_012 = -dV_dtheta012*dtheta012_dcostheta012*dcostheta012_dr0;
+        F0_theta_123 = make_scalar3(0,0,0);
+        //dihedral. a = 0, acting on phi_a+3
+        // dcosphi0123_dr0 = -1/sqrt(D23*D12)*(-C23*vb2+C22*vb3-1/D12*(C23*C12-C13*C22)*(-C22*vb1+C12*vb2));
+        dcosphi0123_dr0 = -root_D12D23_inv*(-C23*vb2+C22*vb3-1/D12*(C23*C12-C13*C22)*(-C22*vb1+C12*vb2));
+        F0_phi_0123 = -dV_dcosphi0123*dcosphi0123_dr0;
+        F0.x = F0_theta_012.x + F0_theta_123.x + F0_phi_0123.x;
+        F0.y = F0_theta_012.y + F0_theta_123.y + F0_phi_0123.y;
+        F0.z = F0_theta_012.z + F0_theta_123.z + F0_phi_0123.z;
 
-        Scalar c = (ax * bx + ay * by + az * bz) * rabinv;
-        Scalar s = rg * rabinv * (ax * vb3.x + ay * vb3.y + az * vb3.z);
+        //Force on particle 1
+        //angle. a = 1, acting on theta_a+1
+        dcostheta012_dr1 = root_C11C22_inv*((C12/C22)*vb2-(C12/C11)*vb1+vb2-vb1);
+        F1_theta_012 = -dV_dtheta012*dtheta012_dcostheta012*dcostheta012_dr1;
+        //angle. a = 1, acting on theta_a+2
+        dcostheta123_dr1 = root_C22C33_inv*((C23/C22)*vb2-vb3);
+        F1_theta_123 = -dV_dtheta123*dtheta123_dcostheta123*dcostheta123_dr1;
+        //dihedral. a = 1, acting on phi_a+2
+        // dcosphi0123_dr1 = -1/sqrt(D23*D12)*(-C12*vb3+C23*vb2-C23*vb1-C22*vb3+2*C13*vb2-1/D12*(C23*C12-C13*C22)*(C22*vb1-C11*vb2-C12*vb2+C12*vb1)-1/D23*(C23*C12-C13*C22)*(-C33*vb2+C23*vb3));
+        dcosphi0123_dr1 = -root_D12D23_inv*(-C12*vb3+C23*vb2-C23*vb1-C22*vb3+2*C13*vb2-1/D12*(C23*C12-C13*C22)*(C22*vb1-C11*vb2-C12*vb2+C12*vb1)-1/D23*(C23*C12-C13*C22)*(-C33*vb2+C23*vb3));
+        F1_phi_0123 = -dV_dcosphi0123*dcosphi0123_dr1;
+        F1.x = F1_theta_012.x + F1_theta_123.x + F1_phi_0123.x;
+        F1.y = F1_theta_012.y + F1_theta_123.y + F1_phi_0123.y;
+        F1.z = F1_theta_012.z + F1_theta_123.z + F1_phi_0123.z;
 
-        if (c > 1.0)
-            c = 1.0;
-        if (c < -1.0)
-            c = -1.0;
+        //Force on particle 2
+        //angle. a = 2, acting on theta_a
+        dcostheta012_dr2 = -root_C11C22_inv*((C12/C22)*vb2-vb1);
+        F2_theta_012 = -dV_dtheta012*dtheta012_dcostheta012*dcostheta012_dr2;
+        //angle. a = 2, acting on theta_a+1
+        dcostheta123_dr2 = root_C22C33_inv*((C23/C33)*vb3-(C23/C22)*vb2+vb3-vb2);
+        F2_theta_123 = -dV_dtheta123*dtheta123_dcostheta123*dcostheta123_dr2;
+        //dihedral. a = 2, acting on phi_a+1
+        // dcosphi0123_dr2 = -1/sqrt(D23*D12)*(C12*vb3-C12*vb2+C23*vb1+C22*vb1-2*C13*vb2-1/D12*(C23*C12-C13*C22)*(C11*vb2-C12*vb1)-1/D23*(C23*C12-C13*C22)*(C33*vb2-C22*vb3-C23*vb3+C23*vb2));
+        dcosphi0123_dr2 = -root_D12D23_inv*(C12*vb3-C12*vb2+C23*vb1+C22*vb1-2*C13*vb2-1/D12*(C23*C12-C13*C22)*(C11*vb2-C12*vb1)-1/D23*(C23*C12-C13*C22)*(C33*vb2-C22*vb3-C23*vb3+C23*vb2));
+        F2_phi_0123 = -dV_dcosphi0123*dcosphi0123_dr2;
+        F2.x = F2_theta_012.x + F2_theta_123.x + F2_phi_0123.x;
+        F2.y = F2_theta_012.y + F2_theta_123.y + F2_phi_0123.y;
+        F2.z = F2_theta_012.z + F2_theta_123.z + F2_phi_0123.z;
 
-        // get values for k1/2 through k4/2 (MEM TRANSFER: 16 bytes)
-        // ----- The 1/2 factor is already stored in the parameters --------
+        //Force on particle 3
+        //angle. a = 3, acting on theta_a
+        F3_theta_012 = make_scalar3(0,0,0);
+        dcostheta123_dr3 = -root_C22C33_inv*((C23/C33)*vb3-vb2);
+        F3_theta_123 = -dV_dtheta123*dtheta123_dcostheta123*dcostheta123_dr3;
+        //dihedral. a = 3, acting on phi_a
+        // dcosphi0123_dr3 = -1/sqrt(D23*D12)*(C12*vb2-C22*vb1-1/D23*(C23*C12-C13*C22)*(C22*vb3-C23*vb2));
+        dcosphi0123_dr3 = -root_D12D23_inv*(C12*vb2-C22*vb1-1/D23*(C23*C12-C13*C22)*(C22*vb3-C23*vb2));
+        F3_phi_0123 = -dV_dcosphi0123*dcosphi0123_dr3;
+        F3.x = F3_theta_012.x + F3_theta_123.x + F3_phi_0123.x;        
+        F3.y = F3_theta_012.y + F3_theta_123.y + F3_phi_0123.y;        
+        F3.z = F3_theta_012.z + F3_theta_123.z + F3_phi_0123.z;
+
+        // upper triangular version of virial tensor
+        Scalar dihedral_virial[6];
+        dihedral_virial[0]
+            = Scalar(1. / 4.) * (-vb1.x * F0.x + vb2.x * F2.x + (vb3.x + vb2.x) * F3.x);
+        dihedral_virial[1]
+            = Scalar(1. / 4.) * (-vb1.y * F0.x + vb2.y * F2.x + (vb3.y + vb2.y) * F3.x);
+        dihedral_virial[2]
+            = Scalar(1. / 4.) * (-vb1.z * F0.x + vb2.z * F2.x + (vb3.z + vb2.z) * F3.x);
+        dihedral_virial[3]
+            = Scalar(1. / 4.) * (-vb1.y * F0.y + vb2.y * F2.y + (vb3.y + vb2.y) * F3.y);
+        dihedral_virial[4]
+            = Scalar(1. / 4.) * (-vb1.z * F0.y + vb2.z * F2.y + (vb3.z + vb2.z) * F3.y);
+        dihedral_virial[5]
+            = Scalar(1. / 4.) * (-vb1.z * F0.z + vb2.z * F2.z + (vb3.z + vb2.z) * F3.z);
         /**
-         * 
-        dihedral_bending_torsion_params params = __ldg(d_params + cur_dihedral_type);
-        Scalar k_phi = h_params.data[dihedral_type].k_phi;
-        Scalar a0 = h_params.data[dihedral_type].a0;
-        Scalar a1 = h_params.data[dihedral_type].a1;
-        Scalar a2 = h_params.data[dihedral_type].a2;
-        Scalar a3 = h_params.data[dihedral_type].a3;
-        Scalar a4 = h_params.data[dihedral_type].a4;
-         */
-        dihedral_bending_torsion_params params = d_params[cur_dihedral_type];
-        Scalar k_phi = params.k_phi;
-        Scalar a0 = params.a0;
-        Scalar a1 = params.a1;
-        Scalar a2 = params.a2;
-        Scalar a3 = params.a3;
-        Scalar a4 = params.a4;
-
-        /**
-
-        fg = vb1.x * vb2m.x + vb1.y * vb2m.y + vb1.z * vb2m.z;
-        hg = vb3.x * vb2m.x + vb3.y * vb2m.y + vb3.z * vb2m.z;
-        fga = fg * ra2inv * rginv;
-        hgb = hg * rb2inv * rginv;
-        gaa = -ra2inv * rg;
-        gbb = rb2inv * rg;
-
-        dtfx = gaa * ax;
-        dtfy = gaa * ay;
-        dtfz = gaa * az;
-        dtgx = fga * ax - hgb * bx;
-        dtgy = fga * ay - hgb * by;
-        dtgz = fga * az - hgb * bz;
-        dthx = gbb * bx;
-        dthy = gbb * by;
-        dthz = gbb * bz;
-
-        sx2 = df * dtgx;
-        sy2 = df * dtgy;
-        sz2 = df * dtgz;
-
-        f1.x = df * dtfx;
-        f1.y = df * dtfy;
-        f1.z = df * dtfz;
-        f1.w = e_dihedral;
-
-        f2.x = sx2 - f1.x;
-        f2.y = sy2 - f1.y;
-        f2.z = sz2 - f1.z;
-        f2.w = e_dihedral;
-
-        f4.x = df * dthx;
-        f4.y = df * dthy;
-        f4.z = df * dthz;
-        f4.w = e_dihedral;
-
-        f3.x = -sx2 - f4.x;
-        f3.y = -sy2 - f4.y;
-        f3.z = -sz2 - f4.z;
-        f3.w = e_dihedral;
-
-        // Apply force to each of the 4 atoms
-        h_force.data[i1].x = h_force.data[i1].x + f1.x;
-        h_force.data[i1].y = h_force.data[i1].y + f1.y;
-        h_force.data[i1].z = h_force.data[i1].z + f1.z;
-        h_force.data[i1].w = h_force.data[i1].w + f1.w;
-        h_force.data[i2].x = h_force.data[i2].x + f2.x;
-        h_force.data[i2].y = h_force.data[i2].y + f2.y;
-        h_force.data[i2].z = h_force.data[i2].z + f2.z;
-        h_force.data[i2].w = h_force.data[i2].w + f2.w;
-        h_force.data[i3].x = h_force.data[i3].x + f3.x;
-        h_force.data[i3].y = h_force.data[i3].y + f3.y;
-        h_force.data[i3].z = h_force.data[i3].z + f3.z;
-        h_force.data[i3].w = h_force.data[i3].w + f3.w;
-        h_force.data[i4].x = h_force.data[i4].x + f4.x;
-        h_force.data[i4].y = h_force.data[i4].y + f4.y;
-        h_force.data[i4].z = h_force.data[i4].z + f4.z;
-        h_force.data[i4].w = h_force.data[i4].w + f4.w;
+        Snippet from hoomd's OPLS DihedralForceGPU.cu:
+        Scalar3 vb1 = pos_a - pos_b;
+        Scalar3 vb2 = pos_c - pos_b;
+        Scalar3 vb3 = pos_d - pos_c;
 
         // Compute 1/4 of the virial, 1/4 for each atom in the dihedral
         // upper triangular version of virial tensor
+        Scalar dihedral_virial[6];
         dihedral_virial[0] = 0.25 * (vb1.x * f1.x + vb2.x * f3.x + (vb3.x + vb2.x) * f4.x);
         dihedral_virial[1] = 0.25 * (vb1.y * f1.x + vb2.y * f3.x + (vb3.y + vb2.y) * f4.x);
         dihedral_virial[2] = 0.25 * (vb1.z * f1.x + vb2.z * f3.x + (vb3.z + vb2.z) * f4.x);
         dihedral_virial[3] = 0.25 * (vb1.y * f1.y + vb2.y * f3.y + (vb3.y + vb2.y) * f4.y);
         dihedral_virial[4] = 0.25 * (vb1.z * f1.y + vb2.z * f3.y + (vb3.z + vb2.z) * f4.y);
         dihedral_virial[5] = 0.25 * (vb1.z * f1.z + vb2.z * f3.z + (vb3.z + vb2.z) * f4.z);
+        */
+        
+
+        if (cur_dihedral_abcd == 0)
+            {
+            force_idx.x += F0.x;
+            force_idx.y += F0.y;
+            force_idx.z += F0.z;
+            }
+        if (cur_dihedral_abcd == 1)
+            {
+            force_idx.x += F1.x;
+            force_idx.y += F1.y;
+            force_idx.z += F1.z;
+            }
+        if (cur_dihedral_abcd == 2)
+            {
+            force_idx.x += F2.x;
+            force_idx.y += F2.y;
+            force_idx.z += F2.z;
+            }
+        if (cur_dihedral_abcd == 3)
+            {
+            force_idx.x += F3.x;
+            force_idx.y += F3.y;
+            force_idx.z += F3.z;
+            }
+
+        // Compute 1/4 of energy to assign to each of 4 atoms in the dihedral
+        e_dihedral = 0.25 * prefactor * torsion_e;
+        force_idx.w += e_dihedral;
 
         for (int k = 0; k < 6; k++)
-            {
-            h_virial.data[virial_pitch * k + i1] += dihedral_virial[k];
-            h_virial.data[virial_pitch * k + i2] += dihedral_virial[k];
-            h_virial.data[virial_pitch * k + i3] += dihedral_virial[k];
-            h_virial.data[virial_pitch * k + i4] += dihedral_virial[k];
-            }
-        */
+            virial_idx[k] += dihedral_virial[k];
         }
 
-    // // now that the force calculation is complete, write out the result (MEM TRANSFER: 20 bytes)
-    // d_force[idx] = force_idx;
-    // for (int k = 0; k < 6; k++)
-    //     d_virial[k * virial_pitch + idx] = virial_idx[k];
+    // now that the force calculation is complete, write out the result (MEM TRANSFER: 20 bytes)
+    d_force[idx] = force_idx;
+    for (int k = 0; k < 6; k++)
+        d_virial[k * virial_pitch + idx] = virial_idx[k];
     }
 
 /*! \param d_force Device memory to write computed forces
