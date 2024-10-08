@@ -22,3 +22,21 @@ def bonded_two_particle_snapshot_factory(two_particle_snapshot_factory):
         return snap
 
     return make_snapshot
+
+@pytest.fixture(scope='session')
+def bonded_four_particle_snapshot_factory(four_particle_snapshot_factory):
+    """Fixture for three sequential bonds."""
+
+    def make_snapshot(bond_types=None, **kwargs):
+        if bond_types is None:
+            bond_types = ['A-A']
+        snap = four_particle_snapshot_factory(**kwargs)
+        if snap.communicator.rank == 0:
+            snap.bonds.types = [bond_types]
+            snap.bonds.N = 3
+            snap.bonds.group[0] = [0, 1]
+            snap.bonds.group[1] = [1, 2]
+            snap.bonds.group[2] = [2, 3]
+        return snap
+
+    return make_snapshot

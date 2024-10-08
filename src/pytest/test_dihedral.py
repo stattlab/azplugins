@@ -2,7 +2,7 @@
 # Copyright (c) 2021-2024, Auburn University
 # Part of azplugins, released under the BSD 3-Clause License.
 
-"""Bond potential unit tests."""
+"""Dihedral potential unit tests."""
 
 import collections
 
@@ -16,12 +16,12 @@ PotentialTestCase = collections.namedtuple(
 )
 
 potential_tests = []
-# bond.DoubleWell
+# dihedral.BendingTorsion
 potential_tests += [
     # test potential when k_phi = 0 
     PotentialTestCase(
-        hoomd.azplugins.dihedral.CombinedBT,
-        dict(k_phi=0, a0=1.5,a1=6.2,a2=1.7,a3=3.0,a4=0.0),#0, 1.5, 6.2, 1.7, 3.0);
+        hoomd.azplugins.dihedral.BendingTorsion,
+        dict(k_phi=0, a0=1.5,a1=6.2,a2=1.7,a3=3.0,a4=7.2),
         (1.0,0.0,0.0),
         (1.0,0.5,0.0),
         (0.7,0.3,-0.2),
@@ -32,8 +32,8 @@ potential_tests += [
 
     # test potential when the first of the angles is 180
     PotentialTestCase(
-        hoomd.azplugins.dihedral.CombinedBT,
-        dict(k_phi=0, a0=1.5,a1=6.2,a2=1.7,a3=3.0,a4=0.0),#0, 1.5, 6.2, 1.7, 3.0);
+        hoomd.azplugins.dihedral.BendingTorsion,
+        dict(k_phi=0, a0=1.5,a1=6.2,a2=1.7,a3=3.0,a4=7.2),#0, 1.5, 6.2, 1.7, 3.0);
         (0.0,0.0,0.0),
         (0.0,0.5,0.0),
         (0.0,1.0,0.0),
@@ -43,8 +43,8 @@ potential_tests += [
     ),
     # test potential when the second of the angles is 180
     PotentialTestCase(
-        hoomd.azplugins.dihedral.CombinedBT,
-        dict(k_phi=0, a0=1.5,a1=6.2,a2=1.7,a3=3.0,a4=0.0),#0, 1.5, 6.2, 1.7, 3.0);
+        hoomd.azplugins.dihedral.BendingTorsion,
+        dict(k_phi=0, a0=1.5,a1=6.2,a2=1.7,a3=3.0,a4=7.2),#0, 1.5, 6.2, 1.7, 3.0);
         (-0.5,-0.5,0.0),
         (0.0,0.0,0.0),
         (0.0,0.5,0.0),
@@ -52,174 +52,54 @@ potential_tests += [
         (0,0,0,0,0,0),
         (0,0,0,0),
     ),
-    # test potential at second minimum
+    # test potential at phi = 0
     PotentialTestCase(
-        hoomd.azplugins.dihedral.CombinedBT,
-        dict(r_0=0.5, r_1=2.5, U_1=5.0, U_tilt=0.0),
-        4.5,
-        0,
-        0,
+        hoomd.azplugins.dihedral.BendingTorsion,
+        dict(k_phi=0, a0=1.5,a1=6.2,a2=1.7,a3=3.0,a4=7.2),#0, 1.5, 6.2, 1.7, 3.0);
+        (-0.5,-0.5,0.0),
+        (0.0,0.0,0.0),
+        (0.0,0.5,0.0),
+        (-0.5,1.0,0.0),
+        (0,0,0,0,0,0),
+        (0,0,0,0),
     ),
-    # test potential between first minimum and maximum
+    # test potential at phi = 180
     PotentialTestCase(
-        hoomd.azplugins.dihedral.CombinedBT,
-        dict(r_0=1.0, r_1=2.0, U_1=1.0, U_tilt=0.0),
-        1.5,
-        0.5625,
-        -1.5,
+        hoomd.azplugins.dihedral.BendingTorsion,
+        dict(k_phi=0, a0=1.5,a1=6.2,a2=1.7,a3=3.0,a4=7.2),#0, 1.5, 6.2, 1.7, 3.0);
+        (-0.5,-0.5,0.0),
+        (0.0,0.0,0.0),
+        (0.0,0.5,0.0),
+        (0.5,1.0,0.0),
+        (0,0,0,0,0,0),
+        (0,0,0,0),
     ),
-    # test potential between maximum and second minimum
+    # test potential at phi = 90
     PotentialTestCase(
-        hoomd.azplugins.dihedral.CombinedBT,
-        dict(r_0=1.0, r_1=2.0, U_1=1.0, U_tilt=0.0),
-        2.5,
-        0.5625,
-        1.5,
-    ),
-    # test non-zero tilt
-    PotentialTestCase(
-        hoomd.azplugins.dihedral.CombinedBT,
-        dict(r_0=1.0, r_1=2.0, U_1=1.0, U_tilt=0.5),
-        2.5,
-        1.03125,
-        0.25,
-    ),
-]
-
-# bond.Quartic
-potential_tests += [
-    # test potential with sigma = epsilon = 0
-    PotentialTestCase(
-        hoomd.azplugins.bond.Quartic,
-        dict(
-            k=1434.3,
-            r_0=1.5,
-            b_1=-0.7589,
-            b_2=0,
-            U_0=67.2234,
-            sigma=0.0,
-            epsilon=0.0,
-            delta=0.0,
-        ),
-        1,
-        20.80586625,
-        -99.2177025,
-    ),
-    # test potential with k == 0
-    PotentialTestCase(
-        hoomd.azplugins.bond.Quartic,
-        dict(
-            epsilon=1.0,
-            sigma=1.0,
-            k=0.0,
-            r_0=1.5,
-            b_1=-0.7589,
-            b_2=0,
-            U_0=67.2234,
-            delta=0,
-        ),
-        1,
-        68.2234,
-        24,
-    ),
-    # test potential with delta passed
-    PotentialTestCase(
-        hoomd.azplugins.bond.Quartic,
-        dict(
-            epsilon=1.0,
-            sigma=1.0,
-            k=1434.3,
-            r_0=1.5,
-            b_1=-0.7589,
-            b_2=0,
-            U_0=67.2234,
-            delta=0.0,
-        ),
-        1,
-        21.80586625,
-        -75.2177025,
-    ),
-    # test potential with nonzero delta passed
-    PotentialTestCase(
-        hoomd.azplugins.bond.Quartic,
-        dict(
-            epsilon=1.0,
-            sigma=1.0,
-            k=1434.3,
-            r_0=1.5,
-            b_1=-0.7589,
-            b_2=0,
-            U_0=67.2234,
-            delta=0.5,
-        ),
-        1.5,
-        21.80586625,
-        -75.2177025,
-    ),
-    # test potential at breaking point
-    PotentialTestCase(
-        hoomd.azplugins.bond.Quartic,
-        dict(
-            epsilon=1.0,
-            sigma=1.0,
-            k=1434.3,
-            r_0=1.5,
-            b_1=-0.7589,
-            b_2=0,
-            U_0=67.2234,
-            delta=0.0,
-        ),
-        1.5,
-        67.2234,
-        0,
-    ),
-    # test potential beyond breaking point
-    PotentialTestCase(
-        hoomd.azplugins.bond.Quartic,
-        dict(
-            epsilon=1.0,
-            sigma=1.0,
-            k=1434.3,
-            r_0=1.5,
-            b_1=-0.7589,
-            b_2=0,
-            U_0=67.2234,
-            delta=0.0,
-        ),
-        1.5,
-        67.2234,
-        0,
-    ),
-    # test potential b_1 = b_2 = 0
-    PotentialTestCase(
-        hoomd.azplugins.bond.Quartic,
-        dict(
-            epsilon=1.0,
-            sigma=1.0,
-            k=1434.3,
-            r_0=1.5,
-            b_1=0,
-            b_2=0,
-            U_0=67.2234,
-            delta=0.0,
-        ),
-        1.25,
-        72.82613438,
-        89.64375,
+        hoomd.azplugins.dihedral.BendingTorsion,
+        dict(k_phi=0, a0=1.5,a1=6.2,a2=1.7,a3=3.0,a4=7.2),#0, 1.5, 6.2, 1.7, 3.0);
+        (-0.5,-0.5,0.0),
+        (0.0,0.0,0.0),
+        (0.0,0.5,0.0),
+        (0.0,1.0,0.5),
+        (0,0,0,0,0,0),
+        (0,0,0,0),
     ),
 ]
-
 
 @pytest.mark.parametrize(
     'potential_test', potential_tests, ids=lambda x: x.potential.__name__
 )
 def test_energy_and_force(
-    simulation_factory, bonded_two_particle_snapshot_factory, potential_test
+    simulation_factory, bonded_four_particle_snapshot_factory, potential_test
 ):
     """Test energy and force evaluation."""
     # make 2 particle test configuration
     sim = simulation_factory(
-        bonded_two_particle_snapshot_factory(d=potential_test.distance)
+        bonded_four_particle_snapshot_factory(r1=potential_test.r1,
+                                              r2=potential_test.r2,
+                                              r3=potential_test.r3,
+                                              r4=potential_test.r4)
     )
 
     # setup dummy NVE integrator
