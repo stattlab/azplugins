@@ -298,9 +298,9 @@ __global__ void gpu_compute_bending_torsion_dihedral_forces_kernel(Scalar4* d_fo
         e_dihedral = 0.25 * prefactor * torsion_e;
         force_idx.w += e_dihedral;
 
-        for (int k = 0; k < 6; k++)
-            virial_idx[k] += dihedral_virial[k];
-        }
+        // for (int k = 0; k < 6; k++)
+        //     virial_idx[k] += dihedral_virial[k];
+        // }
 
     // now that the force calculation is complete, write out the result (MEM TRANSFER: 20 bytes)
     d_force[idx] = force_idx;
