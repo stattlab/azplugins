@@ -47,7 +47,4 @@ class PYBIND11_EXPORT DihedralBendingTorsionForceComputeGPU : public DihedralBen
     } // end namespace azplugins
     } // end namespace hoomd
 
-// //! Exports the DihedralForceCompute class to python
-// void export_DihedralBendingTorsionForceComputeGPU(pybind11::module& m);
-
 #endif

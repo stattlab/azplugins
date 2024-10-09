@@ -19,8 +19,6 @@ namespace hoomd
     {
 namespace azplugins
     {
-// namespace detail
-//     {
 /*! \param sysdef System to compute forces on
     \post Memory is allocated, and forces are zeroed.
 */
@@ -512,10 +510,9 @@ namespace detail
     {
 void export_DihedralBendingTorsionForceCompute(pybind11::module& m)
     {
-    std::cout << "EXPORT FUNCTION ENTEREDDDDDDDDDDDDDDDDDDD";
     pybind11::class_<DihedralBendingTorsionForceCompute,
                      ForceCompute,
-                     std::shared_ptr<DihedralBendingTorsionForceCompute> >(m,
+                     std::shared_ptr<DihedralBendingTorsionForceCompute>>(m,
                                                     "DihedralBendingTorsionForceCompute")
         .def(pybind11::init<std::shared_ptr<SystemDefinition>>())
         .def("setParams", &DihedralBendingTorsionForceCompute::setParams)
