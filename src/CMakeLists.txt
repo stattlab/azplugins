@@ -23,6 +23,8 @@ set(_${COMPONENT_NAME}_cu_sources
 
 set(_${COMPONENT_NAME}_headers
     DihedralBendingTorsion.h
+    DihedralBendingTorsionForceCompute.h
+    DihedralBendingTorsionForceComputeGPU.h
     )
 
 # TODO: List all Python modules in python_files.
@@ -134,10 +136,30 @@ foreach(_evaluator ${_aniso_pair_evaluators})
     endif()
 endforeach()
 
+# # Process cbt dihedral???
+# # configure_file(export_PotentialBond.cc.inc
+# #                 export_PotentialBond${_evaluator}.cc
+# #                 @ONLY)
+# set(_${COMPONENT_NAME}_sources ${_${COMPONENT_NAME}_sources} export_PotentialDihedralBendingTorsion.cc)
+
+# if (ENABLE_HIP)
+#     # configure_file(export_PotentialBondGPU.cc.inc
+#     #                 export_PotentialBond${_evaluator}GPU.cc
+#     #                 @ONLY)
+#     # configure_file(PotentialBondGPUKernel.cu.inc
+#     #                 PotentialBond${_evaluator}GPUKernel.cu
+#     #                 @ONLY)
+#     set(_${COMPONENT_NAME}_sources ${_${COMPONENT_NAME}_sources} export_PotentialDihedralBendingTorsionGPU.cc)
+#     set(_${COMPONENT_NAME}_cu_sources ${_${COMPONENT_NAME}_cu_sources} PotentialDihedralBendingTorsionGPUKernel.cu)
+# endif()
+
 if (ENABLE_HIP)
 set(_cuda_sources ${_${COMPONENT_NAME}_cu_sources})
 endif (ENABLE_HIP)
 
+message(${_${COMPONENT_NAME}_sources})
+message(${_${COMPONENT_NAME}_headers})
+# message(${_cuda_sources})
 hoomd_add_module(_${COMPONENT_NAME} SHARED ${_${COMPONENT_NAME}_sources} ${_cuda_sources} ${_${COMPONENT_NAME}_headers} NO_EXTRAS)
 # Alias into the HOOMD namespace so that external and symlinked components both work.
 add_library(HOOMD::_${COMPONENT_NAME} ALIAS _${COMPONENT_NAME})

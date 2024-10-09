@@ -19,6 +19,8 @@ namespace hoomd
     {
 namespace azplugins
     {
+// namespace detail
+//     {
 /*! \param sysdef System to compute forces on
     \post Memory is allocated, and forces are zeroed.
 */
@@ -301,7 +303,7 @@ void DihedralBendingTorsionForceCompute::computeForces(uint64_t timestep)
 
         /*       Computation of the prefactor */
         /*      Computing 2nd power */
-        cosine_phi_sq = cosine_phi*cosine_phi
+        cosine_phi_sq = cosine_phi*cosine_phi;
 
         prefactor_phi = -torsion_coef[0] * norm_phi
                         * (torsion_coef[2] + torsion_coef[3] * 2.0 * cosine_phi
@@ -510,9 +512,10 @@ namespace detail
     {
 void export_DihedralBendingTorsionForceCompute(pybind11::module& m)
     {
+    std::cout << "EXPORT FUNCTION ENTEREDDDDDDDDDDDDDDDDDDD";
     pybind11::class_<DihedralBendingTorsionForceCompute,
                      ForceCompute,
-                     std::shared_ptr<DihedralBendingTorsionForceCompute>>(m,
+                     std::shared_ptr<DihedralBendingTorsionForceCompute> >(m,
                                                     "DihedralBendingTorsionForceCompute")
         .def(pybind11::init<std::shared_ptr<SystemDefinition>>())
         .def("setParams", &DihedralBendingTorsionForceCompute::setParams)

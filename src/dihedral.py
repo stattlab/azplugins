@@ -17,7 +17,7 @@ Each dihedral is defined by an ordered quadruplet of particle tags in the
 groups, users must explicitly define dihedrals in the initial condition.
 
 .. image:: md-dihedral.svg
-    :alt: Definition of the dihedral bond between particles i, j, k, and l.
+    :alt: Definition of the dihedral between particles i, j, k, and l.
 
 In the dihedral group (i,j,k,l), :math:`\phi` is the signed dihedral angle
 between the planes passing through (:math:`\vec{r}_i, \vec{r}_j, \vec{r}_k`) and
@@ -43,6 +43,7 @@ Important:
 """
 
 """Dihedral potentials"""
+import hoomd;
 
 from hoomd.azplugins import _azplugins
 from hoomd.data.parameterdicts import TypeParameterDict
@@ -133,7 +134,6 @@ class BendingTorsion(dihedral.Dihedral):
 
     def __init__(self):
         super().__init__()
-        # check that some dihedrals are defined
         params = TypeParameter(
             'params',
             'dihedral_types',
@@ -145,3 +145,54 @@ class BendingTorsion(dihedral.Dihedral):
                               a4=float,
                               len_keys=1))
         self._add_typeparam(params)
+
+    # def _attach_hook(self):
+    #     # check that some dihedrals are defined
+    #     if self._simulation.state._cpp_sys_def.getDihedralData().getNGlobal(
+    #     ) == 0:
+    #         self._simulation.device._cpp_msg.warning(
+    #             "No dihedrals are defined.\n")
+
+    #     # create the c++ mirror class
+    #     if isinstance(self._simulation.device, hoomd.device.CPU):
+    #         cpp_class = getattr(self._ext_module, self._cpp_class_name)
+    #     else:
+    #         cpp_class = getattr(self._ext_module, self._cpp_class_name + "GPU")
+
+    #     self._cpp_obj = cpp_class(self._simulation.state._cpp_sys_def)
+
+    # def __init__(self):
+    #     hoomd.util.print_status_line();
+    #     # check that some dihedrals are defined
+    #     if hoomd.context.current.system_definition.getDihedralData().getNGlobal() == 0:
+    #         hoomd.context.msg.error("No dihedrals are defined.\n");
+    #         raise RuntimeError("Error creating combined bending torsion dihedrals");
+
+    #     # initialize the base class
+    #     hoomd.force._force.__init__(self);
+
+    #     self.dihedral_coeff = hoomd.coeff();
+
+    #     # create the c++ mirror class
+    #     if not hoomd.context.exec_conf.isCUDAEnabled():
+    #         self.cpp_force = hoomd.azplugins._azplugins.DihedralBendingTorsionForceCompute(hoomd.context.current.system_definition);
+    #     else:
+    #         self.cpp_force = hoomd.azplugins._azplugins.DihedralBendingTorsionForceComputeGPU(hoomd.context.current.system_definition);
+
+    #     hoomd.context.current.system.addCompute(self.cpp_force, self.force_name);
+
+    #     self.required_coeffs = ['k_phi', 'a0', 'a1', 'a2', 'a3', 'a4'];
+
+        # super().__init__()
+        # # check that some dihedrals are defined
+        # params = TypeParameter(
+        #     'params',
+        #     'dihedral_types',
+        #     TypeParameterDict(k_phi=float,
+        #                       a0=float,
+        #                       a1=float,
+        #                       a2=float,
+        #                       a3=float,
+        #                       a4=float,
+        #                       len_keys=1))
+        # self._add_typeparam(params)

@@ -2,6 +2,13 @@
 // Copyright (c) 2021-2024, Auburn University
 // Part of azplugins, released under the BSD 3-Clause License.
 
+// #include "DihedralBendingTorsionForceCompute.h"
+
+// // include GPU classes
+// #ifdef ENABLE_CUDA
+// #include "DihedralBendingTorsionForceComputeGPU.h"
+// #endif
+
 #include <pybind11/pybind11.h>
 
 namespace hoomd
@@ -85,6 +92,7 @@ void export_PotentialPairDPDThermoGeneralWeightGPU(pybind11::module&);
 
 // dihedral
 void export_DihedralBendingTorsionForceComputeGPU(pybind11::module&);
+// void export_DihedralBendingTorsionForceComputeGPU(pybind11::module&);
 
 #endif // ENABLE_HIP
 

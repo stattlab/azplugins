@@ -88,7 +88,7 @@ void export_DihedralBendingTorsionForceComputeGPU(pybind11::module& m)
     {
     pybind11::class_<DihedralBendingTorsionForceComputeGPU,
                      DihedralBendingTorsionForceCompute,
-                     std::shared_ptr<DihedralBendingTorsionForceComputeGPU>>(m, "DihedralBendingTorsionForceComputeGPU")
+                     std::shared_ptr<DihedralBendingTorsionForceComputeGPU> >(m, "DihedralBendingTorsionForceComputeGPU")
         .def(pybind11::init<std::shared_ptr<SystemDefinition>>());
     }
 

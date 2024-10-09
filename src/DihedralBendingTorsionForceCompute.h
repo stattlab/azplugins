@@ -26,6 +26,8 @@ namespace hoomd
     {
 namespace azplugins
     {
+// namespace detail
+//     {
 /**
  * 
 struct dihedral_bending_torsion_params
@@ -106,7 +108,20 @@ class PYBIND11_EXPORT DihedralBendingTorsionForceCompute : public ForceCompute
     virtual void computeForces(uint64_t timestep);
     };
 
+    // }
     } // end namespace azplugins
     } // end namespace hoomd
+
+// namespace hoomd
+//     {
+// namespace azplugins
+//     {
+// namespace detail
+//     {
+// //! Exports the DihedralForceCompute class to python
+// void export_DihedralBendingTorsionForceCompute(pybind11::module& m);
+//     }
+//     }
+//     }
 
 #endif
