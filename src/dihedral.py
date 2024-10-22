@@ -146,20 +146,20 @@ class BendingTorsion(dihedral.Dihedral):
                               len_keys=1))
         self._add_typeparam(params)
 
-    # def _attach_hook(self):
-    #     # check that some dihedrals are defined
-    #     if self._simulation.state._cpp_sys_def.getDihedralData().getNGlobal(
-    #     ) == 0:
-    #         self._simulation.device._cpp_msg.warning(
-    #             "No dihedrals are defined.\n")
+    def _attach_hook(self):
+        # check that some dihedrals are defined
+        if self._simulation.state._cpp_sys_def.getDihedralData().getNGlobal(
+        ) == 0:
+            self._simulation.device._cpp_msg.warning(
+                "No dihedrals are defined.\n")
 
-    #     # create the c++ mirror class
-    #     if isinstance(self._simulation.device, hoomd.device.CPU):
-    #         cpp_class = getattr(self._ext_module, self._cpp_class_name)
-    #     else:
-    #         cpp_class = getattr(self._ext_module, self._cpp_class_name + "GPU")
+        # create the c++ mirror class
+        if isinstance(self._simulation.device, hoomd.device.CPU):
+            cpp_class = getattr(self._ext_module, self._cpp_class_name)
+        else:
+            cpp_class = getattr(self._ext_module, self._cpp_class_name + "GPU")
 
-    #     self._cpp_obj = cpp_class(self._simulation.state._cpp_sys_def)
+        self._cpp_obj = cpp_class(self._simulation.state._cpp_sys_def)
 
     # def __init__(self):
     #     hoomd.util.print_status_line();

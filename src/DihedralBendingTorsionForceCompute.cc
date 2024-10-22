@@ -77,11 +77,6 @@ pybind11::dict DihedralBendingTorsionForceCompute::getParams(std::string type)
     // ArrayHandle<Scalar4> h_params(m_params, access_location::host, access_mode::read);
     // auto val = h_params.data[typ];
     pybind11::dict params;
-    // // note: the values stored in params are precomputed k/2 values
-    // params["k1"] = val.x * 2;
-    // params["k2"] = val.y * 2;
-    // params["k3"] = val.z * 2;
-    // params["k4"] = val.w * 2;
     ArrayHandle<dihedral_bending_torsion_params> h_params(m_params,
                                                    access_location::host,
                                                    access_mode::read);
@@ -117,7 +112,7 @@ void DihedralBendingTorsionForceCompute::computeForces(uint64_t timestep)
     assert(h_pos.data);
     assert(h_rtag.data);
 
-    // size_t virial_pitch = m_virial.getPitch();
+    size_t virial_pitch = m_virial.getPitch();
 
     // From LAMMPS OPLS dihedral implementation
     unsigned int i1, i2, i3, i4, n, dihedral_type;
@@ -131,9 +126,9 @@ void DihedralBendingTorsionForceCompute::computeForces(uint64_t timestep)
     volatile Scalar3 f_phi_ai, f_phi_aj, f_phi_ak, f_phi_al;
     Scalar e_dihedral;
     Scalar k_phi, a0, a1, a2, a3, a4;
-    // Scalar dihedral_virial[6];
-    // Scalar angle_012_virial[6];
-    // Scalar angle_123_virial[6];
+    Scalar dihedral_virial[6];
+    Scalar angle_012_virial[6];
+    Scalar angle_123_virial[6];
 
     // get a local copy of the simulation box
     const BoxDim& box = m_pdata->getBox();
@@ -259,16 +254,14 @@ void DihedralBendingTorsionForceCompute::computeForces(uint64_t timestep)
         d_ante      = c_self_ante * c_self_crnt - c_cros_ante * c_cros_ante;
         d_post      = c_self_post * c_self_crnt - c_cros_post * c_cros_post;
 
-        // /*  When three consecutive beads align, we obtain values close to zero.
-        // Here we avoid small values to prevent round-off errors. */
-        // if (d_ante < GMX_REAL_EPS)
-        // {
-        //     d_ante = GMX_REAL_EPS;
-        // }
-        // if (d_post < GMX_REAL_EPS)
-        // {
-        //     d_post = GMX_REAL_EPS;
-        // }
+        if (d_ante < FLOAT_EPS)
+        {
+            d_ante = FLOAT_EPS;
+        }
+        if (d_post < FLOAT_EPS)
+        {
+            d_post = FLOAT_EPS;
+        }
 
         /* Computations of cosines */
         norm_phi           = 1.0 / std::sqrt(d_ante * d_post);
@@ -457,26 +450,26 @@ void DihedralBendingTorsionForceCompute::computeForces(uint64_t timestep)
 
         //For the virials. From my reading, I believe I should do for each atom the dihedral + for atoms 1-3 the first angle virial + for atoms 2-4 the second angle virial
         // In other Hoomd dihedral scripts, the definition of vb1 
-        // angle_012_virial[0] = (1. / 3.) * (vb1.x * f_theta_ante_ai.x + vb2.x * f_theta_ante_ak.x);
-        // angle_012_virial[1] = (1. / 3.) * (vb1.y * f_theta_ante_ai.x + vb2.y * f_theta_ante_ak.x);
-        // angle_012_virial[2] = (1. / 3.) * (vb1.z * f_theta_ante_ai.x + vb2.z * f_theta_ante_ak.x);
-        // angle_012_virial[3] = (1. / 3.) * (vb1.y * f_theta_ante_ai.y + vb2.y * f_theta_ante_ak.y);
-        // angle_012_virial[4] = (1. / 3.) * (vb1.z * f_theta_ante_ai.y + vb2.z * f_theta_ante_ak.y);
-        // angle_012_virial[5] = (1. / 3.) * (vb1.z * f_theta_ante_ai.z + vb2.z * f_theta_ante_ak.z);
+        angle_012_virial[0] = (1. / 3.) * (delta_ante.x * f_theta_ante_ai.x + delta_crnt.x * f_theta_ante_ak.x);
+        angle_012_virial[1] = (1. / 3.) * (delta_ante.y * f_theta_ante_ai.x + delta_crnt.y * f_theta_ante_ak.x);
+        angle_012_virial[2] = (1. / 3.) * (delta_ante.z * f_theta_ante_ai.x + delta_crnt.z * f_theta_ante_ak.x);
+        angle_012_virial[3] = (1. / 3.) * (delta_ante.y * f_theta_ante_ai.y + delta_crnt.y * f_theta_ante_ak.y);
+        angle_012_virial[4] = (1. / 3.) * (delta_ante.z * f_theta_ante_ai.y + delta_crnt.z * f_theta_ante_ak.y);
+        angle_012_virial[5] = (1. / 3.) * (delta_ante.z * f_theta_ante_ai.z + delta_crnt.z * f_theta_ante_ak.z);
 
-        // angle_123_virial[0] = (1. / 3.) * (vb2.x * f_theta_post_aj.x + vb3.x * f_theta_post_al.x);
-        // angle_123_virial[1] = (1. / 3.) * (vb2.y * f_theta_post_aj.x + vb3.y * f_theta_post_al.x);
-        // angle_123_virial[2] = (1. / 3.) * (vb2.z * f_theta_post_aj.x + vb3.z * f_theta_post_al.x);
-        // angle_123_virial[3] = (1. / 3.) * (vb2.y * f_theta_post_aj.y + vb3.y * f_theta_post_al.y);
-        // angle_123_virial[4] = (1. / 3.) * (vb2.z * f_theta_post_aj.y + vb3.z * f_theta_post_al.y);
-        // angle_123_virial[5] = (1. / 3.) * (vb2.z * f_theta_post_aj.z + vb3.z * f_theta_post_al.z);
+        angle_123_virial[0] = (1. / 3.) * (delta_crnt.x * f_theta_post_aj.x + delta_post.x * f_theta_post_al.x);
+        angle_123_virial[1] = (1. / 3.) * (delta_crnt.y * f_theta_post_aj.x + delta_post.y * f_theta_post_al.x);
+        angle_123_virial[2] = (1. / 3.) * (delta_crnt.z * f_theta_post_aj.x + delta_post.z * f_theta_post_al.x);
+        angle_123_virial[3] = (1. / 3.) * (delta_crnt.y * f_theta_post_aj.y + delta_post.y * f_theta_post_al.y);
+        angle_123_virial[4] = (1. / 3.) * (delta_crnt.z * f_theta_post_aj.y + delta_post.z * f_theta_post_al.y);
+        angle_123_virial[5] = (1. / 3.) * (delta_crnt.z * f_theta_post_aj.z + delta_post.z * f_theta_post_al.z);
     
-        // dihedral_virial[0] = 0.25 * (vb1.x * f_phi_ai.x + vb2.x * f_phi_ak.x + (vb3.x+ vb2.x) * f_phi_al.x);
-        // dihedral_virial[1] = 0.25 * (vb1.y * f_phi_ai.x + vb2.y * f_phi_ak.x + (vb3.y+ vb2.y) * f_phi_al.x);
-        // dihedral_virial[2] = 0.25 * (vb1.z * f_phi_ai.x + vb2.z * f_phi_ak.x + (vb3.z+ vb2.z) * f_phi_al.x);
-        // dihedral_virial[3] = 0.25 * (vb1.y * f_phi_ai.y + vb2.y * f_phi_ak.y + (vb3.y+ vb2.y) * f_phi_al.y);
-        // dihedral_virial[4] = 0.25 * (vb1.z * f_phi_ai.y + vb2.z * f_phi_ak.y + (vb3.z+ vb2.z) * f_phi_al.y);
-        // dihedral_virial[5] = 0.25 * (vb1.z * f_phi_ai.z + vb2.z * f_phi_ak.z + (vb3.z+ vb2.z) * f_phi_al.z);
+        dihedral_virial[0] = 0.25 * (delta_ante.x * f_phi_ai.x + delta_crnt.x * f_phi_ak.x + (delta_post.x+ delta_crnt.x) * f_phi_al.x);
+        dihedral_virial[1] = 0.25 * (delta_ante.y * f_phi_ai.x + delta_crnt.y * f_phi_ak.x + (delta_post.y+ delta_crnt.y) * f_phi_al.x);
+        dihedral_virial[2] = 0.25 * (delta_ante.z * f_phi_ai.x + delta_crnt.z * f_phi_ak.x + (delta_post.z+ delta_crnt.z) * f_phi_al.x);
+        dihedral_virial[3] = 0.25 * (delta_ante.y * f_phi_ai.y + delta_crnt.y * f_phi_ak.y + (delta_post.y+ delta_crnt.y) * f_phi_al.y);
+        dihedral_virial[4] = 0.25 * (delta_ante.z * f_phi_ai.y + delta_crnt.z * f_phi_ak.y + (delta_post.z+ delta_crnt.z) * f_phi_al.y);
+        dihedral_virial[5] = 0.25 * (delta_ante.z * f_phi_ai.z + delta_crnt.z * f_phi_ak.z + (delta_post.z+ delta_crnt.z) * f_phi_al.z);
 
         // Apply force to each of the 4 atoms
         h_force.data[i1].x = h_force.data[i1].x + f_phi_ai.x + f_theta_ante_ai.x;
@@ -496,13 +489,13 @@ void DihedralBendingTorsionForceCompute::computeForces(uint64_t timestep)
         h_force.data[i4].z = h_force.data[i4].z + f_phi_al.z + f_theta_post_al.z;
         h_force.data[i4].w = h_force.data[i4].w + e_dihedral;
 
-        // for (int k = 0; k < 6; k++)
-        //     {
-        //     h_virial.data[virial_pitch * k + i1] += angle_012_virial[k] + dihedral_virial[k];
-        //     h_virial.data[virial_pitch * k + i2] += angle_012_virial[k] + angle_123_virial[k] + dihedral_virial[k];
-        //     h_virial.data[virial_pitch * k + i3] += angle_012_virial[k] + angle_123_virial[k] + dihedral_virial[k];
-        //     h_virial.data[virial_pitch * k + i4] += angle_123_virial[k] + dihedral_virial[k];
-        //     }
+        for (int k = 0; k < 6; k++)
+            {
+            h_virial.data[virial_pitch * k + i1] += angle_012_virial[k] + dihedral_virial[k];
+            h_virial.data[virial_pitch * k + i2] += angle_012_virial[k] + angle_123_virial[k] + dihedral_virial[k];
+            h_virial.data[virial_pitch * k + i3] += angle_012_virial[k] + angle_123_virial[k] + dihedral_virial[k];
+            h_virial.data[virial_pitch * k + i4] += angle_123_virial[k] + dihedral_virial[k];
+            }
         }
     }
 

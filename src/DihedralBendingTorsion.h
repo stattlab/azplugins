@@ -5,6 +5,9 @@
 
 #include "hoomd/HOOMDMath.h"
 
+/*! \brief Single precision accuracy */
+#define FLOAT_EPS 1.19209290e-07
+
 namespace hoomd
     {
 namespace azplugins
