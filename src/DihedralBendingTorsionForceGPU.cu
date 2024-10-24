@@ -66,6 +66,20 @@ __global__ void gpu_compute_bending_torsion_dihedral_forces_kernel(Scalar4* d_fo
     for (unsigned int i = 0; i < 6; i++)
         virial_idx[i] = Scalar(0.0);
 
+    // this volatile is not strictly needed, but it works around a compiler bug on Mac 
+    // arm64 with Apple clang version 13.0.0 (clang-1300.0.29.30) that occurs with the 
+    // OPLS force compute.
+    // Without the volatile, the x component of f_phi_aj may always computed the same as
+    // the y component
+    volatile Scalar3 f_theta_ante_ai, f_theta_ante_aj, f_theta_ante_ak;
+    volatile Scalar3 f_theta_post_aj, f_theta_post_ak, f_theta_post_al;
+    volatile Scalar3 f_phi_ai, f_phi_aj, f_phi_ak, f_phi_al;
+    Scalar e_dihedral;
+    Scalar k_phi, a0, a1, a2, a3, a4;
+    Scalar dihedral_phi_virial[6];
+    Scalar theta_ante_virial[6];
+    Scalar theta_post_virial[6];
+
     // loop over all dihedrals
     for (int dihedral_idx = 0; dihedral_idx < n_dihedrals; dihedral_idx++)
         {
@@ -119,188 +133,345 @@ __global__ void gpu_compute_bending_torsion_dihedral_forces_kernel(Scalar4* d_fo
 
         // get the dihedral parameters according to the type
         dihedral_bending_torsion_params params = d_params[cur_dihedral_type];
-        Scalar k_phi = params.k_phi;
-        Scalar a0 = params.a0;
-        Scalar a1 = params.a1;
-        Scalar a2 = params.a2;
-        Scalar a3 = params.a3;
-        Scalar a4 = params.a4;
-        /**
-        dihedral_type = m_dihedral_data->getTypeByIndex(n);
-        const dihedral_bending_torsion_params& param = h_params.data[dihedral_type];
-        k_phi = param.k_phi;
-        a0 = param.a0;
-        a1 = param.a1;
-        a2 = param.a2;
-        a3 = param.a3;
-        a4 = param.a4;
-         */
+        k_phi = params.k_phi;
+        a0 = params.a0;
+        a1 = params.a1;
+        a2 = params.a2;
+        a3 = params.a3;
+        a4 = params.a4;
 
-        // the three bonds
-        Scalar3 vb1 = pos_b - pos_a;
-        Scalar3 vb2 = pos_c - pos_b;
-        Scalar3 vb3 = pos_d - pos_c;
+        // bond vectors
+        Scalar3 delta_ante = pos_b - pos_a;
+        Scalar3 delta_crnt = pos_c - pos_b;
+        Scalar3 delta_post = pos_d - pos_c;
 
         // apply periodic boundary conditions
-        vb1 = box.minImage(vb1);
-        vb2 = box.minImage(vb2);
-        vb3 = box.minImage(vb3);
+        delta_ante = box.minImage(delta_ante);
+        delta_crnt = box.minImage(delta_crnt);
+        delta_post = box.minImage(delta_post);
 
-        // simplifiers
-        Scalar C11 = vb1.x * vb1.x + vb1.y * vb1.y + vb1.z * vb1.z;
-        Scalar C12 = vb1.x * vb2.x + vb1.y * vb2.y + vb1.z * vb2.z;
-        Scalar C22 = vb2.x * vb2.x + vb2.y * vb2.y + vb2.z * vb2.z;
-        Scalar C23 = vb2.x * vb3.x + vb2.y * vb3.y + vb2.z * vb3.z;
-        Scalar C33 = vb3.x * vb3.x + vb3.y * vb3.y + vb3.z * vb3.z;
-        Scalar C13 = vb1.x * vb3.x + vb1.y * vb3.y + vb1.z * vb3.z;
-        Scalar D12 = C11*C22-C12*C12;
-        Scalar D23 = C22*C33-C23*C23;
-        // to speed up computation
-        Scalar root_D12D23_inv = 1/sqrt(D12*D23);
-        Scalar root_C11C22_inv = 1/sqrt(C11*C22);
-        Scalar root_C22C33_inv = 1/sqrt(C22*C33);
+        // Computation of forces
+        Scalar c_self_ante, c_self_crnt, c_self_post;
+        Scalar c_cros_ante, c_cros_acrs, c_cros_post;
+        Scalar c_prod, d_ante, d_post;
+        Scalar norm_phi, norm_theta_ante, norm_theta_post;
+        Scalar cosine_phi, cosine_phi_sq, cosine_theta_ante, cosine_theta_post;
+        Scalar sine_theta_ante_sq, sine_theta_post_sq;
+        Scalar sine_theta_ante, sine_theta_post;
+        Scalar prefactor_phi;
+        Scalar ratio_phi_ante, ratio_phi_post;
+        Scalar factor_phi_ai_ante, factor_phi_ai_crnt, factor_phi_ai_post;
+        Scalar factor_phi_aj_ante, factor_phi_aj_crnt, factor_phi_aj_post;
+        Scalar factor_phi_ak_ante, factor_phi_ak_crnt, factor_phi_ak_post;
+        Scalar factor_phi_al_ante, factor_phi_al_crnt, factor_phi_al_post;
+        Scalar prefactor_theta_ante, ratio_theta_ante_ante, ratio_theta_ante_crnt;
+        Scalar prefactor_theta_post, ratio_theta_post_crnt, ratio_theta_post_post;
+        Scalar energy;
 
-        // cosines of angles
-        Scalar cos_theta_012 = C12/sqrt(C22*C11); //a=2
-        Scalar cos_theta_123 = C23/sqrt(C33*C22); //a=3
-        Scalar theta_012 = acos(cos_theta_012);
-        Scalar theta_123 = acos(cos_theta_123);
-        Scalar sin_theta_012 = sin(theta_012);
-        Scalar sin_theta_123 = sin(theta_123);
-        // cosine of dihedral
-        // cos_phi_0123 = -(C23*C12-C13*C22)/sqrt(D23*D12);  //a = 3
-        Scalar cos_phi_0123 = -(C23*C12-C13*C22)*root_D12D23_inv;  //a = 3
+        /* The formula for combined bending-torsion potential (see file "dihedral.py") 
+        * contains in its expression not only the dihedral angle \f[\phi\f] but also 
+        * \f[\theta_{i-1}\f] (theta_ante below) and \f[\theta_{i}\f]
+        * (theta_post below)---the adjacent bending angles. The forces for the
+        * particles ai, aj, ak, al have components coming from the derivatives of the 
+        * potential with respect to all three angles.
+        * This function is organized in 5 parts
+        * PART 1 - Computes force factors common to all the derivatives for the four 
+        *           particles
+        * PART 2 - Computes the force components due to the derivatives of dihedral
+        *           angle Phi
+        * PART 3 - Computes the force components due to the derivatives of bending angle
+        *           Theta_Ante
+        * PART 4 - Computes the force components due to the derivatives of bending angle
+        *           Theta_Post
+        * PART 5 - Applies the forces and virial tensor from this dihedral
+        * Below we will respect this structure */
 
-        // common partial derivatives
-        Scalar prefactor = k_phi*sin_theta_012*sin_theta_012*sin_theta_012*sin_theta_123*sin_theta_123*sin_theta_123;
-        Scalar torsion_e = a0 + a1*cos_phi_0123 + a2*cos_phi_0123*cos_phi_0123 + a3*cos_phi_0123*cos_phi_0123*cos_phi_0123 + a4*cos_phi_0123*cos_phi_0123*cos_phi_0123*cos_phi_0123;
-        Scalar dV_dtheta012 = prefactor*3*cos_theta_012/sin_theta_012*torsion_e;
-        Scalar dV_dtheta123 = prefactor*3*cos_theta_123/sin_theta_123*torsion_e;
-        Scalar dV_dcosphi0123 = prefactor*(torsion_e-a0)/cos_phi_0123;
 
-        Scalar dtheta012_dcostheta012 = -1/sin_theta_012;
-        Scalar dtheta123_dcostheta123 = -1/sin_theta_123;
+        /* PART 1 - COMPUTES FORCE FACTORS COMMON TO ALL DERIVATIVES FOR THE FOUR PARTICLES */
 
-        //Force on particle 0
-        //angle. a = 0, acting on theta_a+2
-        dcostheta012_dr0 = root_C11C22_inv*((C12/C11)*vb1-vb2);
-        F0_theta_012 = -dV_dtheta012*dtheta012_dcostheta012*dcostheta012_dr0;
-        F0_theta_123 = make_scalar3(0,0,0);
-        //dihedral. a = 0, acting on phi_a+3
-        // dcosphi0123_dr0 = -1/sqrt(D23*D12)*(-C23*vb2+C22*vb3-1/D12*(C23*C12-C13*C22)*(-C22*vb1+C12*vb2));
-        dcosphi0123_dr0 = -root_D12D23_inv*(-C23*vb2+C22*vb3-1/D12*(C23*C12-C13*C22)*(-C22*vb1+C12*vb2));
-        F0_phi_0123 = -dV_dcosphi0123*dcosphi0123_dr0;
-        F0.x = F0_theta_012.x + F0_theta_123.x + F0_phi_0123.x;
-        F0.y = F0_theta_012.y + F0_theta_123.y + F0_phi_0123.y;
-        F0.z = F0_theta_012.z + F0_theta_123.z + F0_phi_0123.z;
+        /* Computation of the cosine of the dihedral angle. The scalar ("dot") product method
+        * is used. c_*_* cumulate the scalar products of the differences of particles
+        * positions while c_prod, d_ante and d_post are differences of products of scalar
+        * terms that are parts of the derivatives of forces */
+        c_self_ante = dot(delta_ante, delta_ante);
+        c_self_crnt = dot(delta_crnt, delta_crnt);
+        c_self_post = dot(delta_post, delta_post);
+        c_cros_ante = dot(delta_ante, delta_crnt);
+        c_cros_acrs = dot(delta_ante, delta_post);
+        c_cros_post = dot(delta_crnt, delta_post);
+        c_prod      = c_cros_ante * c_cros_post - c_self_crnt * c_cros_acrs;
+        d_ante      = c_self_ante * c_self_crnt - c_cros_ante * c_cros_ante;
+        d_post      = c_self_post * c_self_crnt - c_cros_post * c_cros_post;
 
-        //Force on particle 1
-        //angle. a = 1, acting on theta_a+1
-        dcostheta012_dr1 = root_C11C22_inv*((C12/C22)*vb2-(C12/C11)*vb1+vb2-vb1);
-        F1_theta_012 = -dV_dtheta012*dtheta012_dcostheta012*dcostheta012_dr1;
-        //angle. a = 1, acting on theta_a+2
-        dcostheta123_dr1 = root_C22C33_inv*((C23/C22)*vb2-vb3);
-        F1_theta_123 = -dV_dtheta123*dtheta123_dcostheta123*dcostheta123_dr1;
-        //dihedral. a = 1, acting on phi_a+2
-        // dcosphi0123_dr1 = -1/sqrt(D23*D12)*(-C12*vb3+C23*vb2-C23*vb1-C22*vb3+2*C13*vb2-1/D12*(C23*C12-C13*C22)*(C22*vb1-C11*vb2-C12*vb2+C12*vb1)-1/D23*(C23*C12-C13*C22)*(-C33*vb2+C23*vb3));
-        dcosphi0123_dr1 = -root_D12D23_inv*(-C12*vb3+C23*vb2-C23*vb1-C22*vb3+2*C13*vb2-1/D12*(C23*C12-C13*C22)*(C22*vb1-C11*vb2-C12*vb2+C12*vb1)-1/D23*(C23*C12-C13*C22)*(-C33*vb2+C23*vb3));
-        F1_phi_0123 = -dV_dcosphi0123*dcosphi0123_dr1;
-        F1.x = F1_theta_012.x + F1_theta_123.x + F1_phi_0123.x;
-        F1.y = F1_theta_012.y + F1_theta_123.y + F1_phi_0123.y;
-        F1.z = F1_theta_012.z + F1_theta_123.z + F1_phi_0123.z;
+        /*  When three consecutive beads align, we obtain values close to zero.
+        Here we avoid small values to prevent round-off errors. */
+        if (d_ante < FLOAT_EPS)
+        {
+            d_ante = FLOAT_EPS;
+        }
+        if (d_post < FLOAT_EPS)
+        {
+            d_post = FLOAT_EPS;
+        }
 
-        //Force on particle 2
-        //angle. a = 2, acting on theta_a
-        dcostheta012_dr2 = -root_C11C22_inv*((C12/C22)*vb2-vb1);
-        F2_theta_012 = -dV_dtheta012*dtheta012_dcostheta012*dcostheta012_dr2;
-        //angle. a = 2, acting on theta_a+1
-        dcostheta123_dr2 = root_C22C33_inv*((C23/C33)*vb3-(C23/C22)*vb2+vb3-vb2);
-        F2_theta_123 = -dV_dtheta123*dtheta123_dcostheta123*dcostheta123_dr2;
-        //dihedral. a = 2, acting on phi_a+1
-        // dcosphi0123_dr2 = -1/sqrt(D23*D12)*(C12*vb3-C12*vb2+C23*vb1+C22*vb1-2*C13*vb2-1/D12*(C23*C12-C13*C22)*(C11*vb2-C12*vb1)-1/D23*(C23*C12-C13*C22)*(C33*vb2-C22*vb3-C23*vb3+C23*vb2));
-        dcosphi0123_dr2 = -root_D12D23_inv*(C12*vb3-C12*vb2+C23*vb1+C22*vb1-2*C13*vb2-1/D12*(C23*C12-C13*C22)*(C11*vb2-C12*vb1)-1/D23*(C23*C12-C13*C22)*(C33*vb2-C22*vb3-C23*vb3+C23*vb2));
-        F2_phi_0123 = -dV_dcosphi0123*dcosphi0123_dr2;
-        F2.x = F2_theta_012.x + F2_theta_123.x + F2_phi_0123.x;
-        F2.y = F2_theta_012.y + F2_theta_123.y + F2_phi_0123.y;
-        F2.z = F2_theta_012.z + F2_theta_123.z + F2_phi_0123.z;
+        /* Computations of cosines and configuration geometry*/
+        norm_phi           = 1.0 / std::sqrt(d_ante * d_post);
+        norm_theta_ante    = 1.0 / std::sqrt(c_self_ante * c_self_crnt);
+        norm_theta_post    = 1.0 / std::sqrt(c_self_crnt * c_self_post);
+        cosine_phi         = c_prod * norm_phi;
+        cosine_theta_ante  = c_cros_ante * norm_theta_ante;
+        cosine_theta_post  = c_cros_post * norm_theta_post;
+        sine_theta_ante_sq = 1 - cosine_theta_ante * cosine_theta_ante;
+        sine_theta_post_sq = 1 - cosine_theta_post * cosine_theta_post;
 
-        //Force on particle 3
-        //angle. a = 3, acting on theta_a
-        F3_theta_012 = make_scalar3(0,0,0);
-        dcostheta123_dr3 = -root_C22C33_inv*((C23/C33)*vb3-vb2);
-        F3_theta_123 = -dV_dtheta123*dtheta123_dcostheta123*dcostheta123_dr3;
-        //dihedral. a = 3, acting on phi_a
-        // dcosphi0123_dr3 = -1/sqrt(D23*D12)*(C12*vb2-C22*vb1-1/D23*(C23*C12-C13*C22)*(C22*vb3-C23*vb2));
-        dcosphi0123_dr3 = -root_D12D23_inv*(C12*vb2-C22*vb1-1/D23*(C23*C12-C13*C22)*(C22*vb3-C23*vb2));
-        F3_phi_0123 = -dV_dcosphi0123*dcosphi0123_dr3;
-        F3.x = F3_theta_012.x + F3_theta_123.x + F3_phi_0123.x;        
-        F3.y = F3_theta_012.y + F3_theta_123.y + F3_phi_0123.y;        
-        F3.z = F3_theta_012.z + F3_theta_123.z + F3_phi_0123.z;
+        /*	It is possible that cosine_theta is slightly bigger than 1.0 due to round-off errors. */
+        if (sine_theta_ante_sq < 0.0)
+        {
+            sine_theta_ante_sq = 0.0;
+        }
+        if (sine_theta_post_sq < 0.0)
+        {
+            sine_theta_post_sq = 0.0;
+        }
+        sine_theta_ante = std::sqrt(sine_theta_ante_sq);
+        sine_theta_post = std::sqrt(sine_theta_post_sq);
 
-        // upper triangular version of virial tensor
-        Scalar dihedral_virial[6];
-        dihedral_virial[0]
-            = Scalar(1. / 4.) * (-vb1.x * F0.x + vb2.x * F2.x + (vb3.x + vb2.x) * F3.x);
-        dihedral_virial[1]
-            = Scalar(1. / 4.) * (-vb1.y * F0.x + vb2.y * F2.x + (vb3.y + vb2.y) * F3.x);
-        dihedral_virial[2]
-            = Scalar(1. / 4.) * (-vb1.z * F0.x + vb2.z * F2.x + (vb3.z + vb2.z) * F3.x);
-        dihedral_virial[3]
-            = Scalar(1. / 4.) * (-vb1.y * F0.y + vb2.y * F2.y + (vb3.y + vb2.y) * F3.y);
-        dihedral_virial[4]
-            = Scalar(1. / 4.) * (-vb1.z * F0.y + vb2.z * F2.y + (vb3.z + vb2.z) * F3.y);
-        dihedral_virial[5]
-            = Scalar(1. / 4.) * (-vb1.z * F0.z + vb2.z * F2.z + (vb3.z + vb2.z) * F3.z);
-        /**
-        Snippet from hoomd's OPLS DihedralForceGPU.cu:
-        Scalar3 vb1 = pos_a - pos_b;
-        Scalar3 vb2 = pos_c - pos_b;
-        Scalar3 vb3 = pos_d - pos_c;
+        /* PART 2 - COMPUTES FORCE COMPONENTS DUE TO DERIVATIVES TO DIHEDRAL ANGLE PHI */
 
-        // Compute 1/4 of the virial, 1/4 for each atom in the dihedral
-        // upper triangular version of virial tensor
-        Scalar dihedral_virial[6];
-        dihedral_virial[0] = 0.25 * (vb1.x * f1.x + vb2.x * f3.x + (vb3.x + vb2.x) * f4.x);
-        dihedral_virial[1] = 0.25 * (vb1.y * f1.x + vb2.y * f3.x + (vb3.y + vb2.y) * f4.x);
-        dihedral_virial[2] = 0.25 * (vb1.z * f1.x + vb2.z * f3.x + (vb3.z + vb2.z) * f4.x);
-        dihedral_virial[3] = 0.25 * (vb1.y * f1.y + vb2.y * f3.y + (vb3.y + vb2.y) * f4.y);
-        dihedral_virial[4] = 0.25 * (vb1.z * f1.y + vb2.z * f3.y + (vb3.z + vb2.z) * f4.y);
-        dihedral_virial[5] = 0.25 * (vb1.z * f1.z + vb2.z * f3.z + (vb3.z + vb2.z) * f4.z);
-        */
+        /*      Computation of ratios */
+        ratio_phi_ante = c_prod / d_ante;
+        ratio_phi_post = c_prod / d_post;
+
+        /*       Computation of the prefactor */
+        cosine_phi_sq = cosine_phi*cosine_phi;
+        prefactor_phi = -k_phi * norm_phi
+                        * (a1 + a2 * 2.0 * cosine_phi
+                        + a3 * 3.0 * (cosine_phi_sq) + 4 * a4 * cosine_phi_sq * cosine_phi)
+                        * sine_theta_ante_sq * sine_theta_ante * sine_theta_post_sq * sine_theta_post;
+
+        /* Computation of factors (important for gaining speed). Factors factor_phi_*  
+        * are coming from the derivatives of the torsion angle (phi) with respect to the
+        * beads ai, aj, al, ak, (four) coordinates and they are multiplied in the force 
+        * computations with the differences of the particles positions stored in 
+        * parameters delta_ante, delta_crnt, delta_post. For formulas see file 
+        * "dihedral.py" */
+
+        factor_phi_ai_ante = ratio_phi_ante * c_self_crnt;
+        factor_phi_ai_crnt = -c_cros_post - ratio_phi_ante * c_cros_ante;
+        factor_phi_ai_post = c_self_crnt;
+        factor_phi_aj_ante = -c_cros_post - ratio_phi_ante * (c_self_crnt + c_cros_ante);
+        factor_phi_aj_crnt = c_cros_post + c_cros_acrs * 2.0
+                            + ratio_phi_ante * (c_self_ante + c_cros_ante) + ratio_phi_post * c_self_post;
+        factor_phi_aj_post = -(c_cros_ante + c_self_crnt) - ratio_phi_post * c_cros_post;
+        factor_phi_ak_ante = c_cros_post + c_self_crnt + ratio_phi_ante * c_cros_ante;
+        factor_phi_ak_crnt = -(c_cros_ante + c_cros_acrs * 2.0) - ratio_phi_ante * c_self_ante
+                            - ratio_phi_post * (c_self_post + c_cros_post);
+        factor_phi_ak_post = c_cros_ante + ratio_phi_post * (c_self_crnt + c_cros_post);
+        factor_phi_al_ante = -c_self_crnt;
+        factor_phi_al_crnt = c_cros_ante + ratio_phi_post * c_cros_post;
+        factor_phi_al_post = -ratio_phi_post * c_self_crnt;
+
+        /* Computation of forces due to the derivatives of dihedral angle phi*/
+        f_phi_ai.x = prefactor_phi
+                    * (factor_phi_ai_ante * delta_ante.x + factor_phi_ai_crnt * delta_crnt.x
+                        + factor_phi_ai_post * delta_post.x);
+        f_phi_aj.x = prefactor_phi
+                    * (factor_phi_aj_ante * delta_ante.x + factor_phi_aj_crnt * delta_crnt.x
+                        + factor_phi_aj_post * delta_post.x);
+        f_phi_ak.x = prefactor_phi
+                    * (factor_phi_ak_ante * delta_ante.x + factor_phi_ak_crnt * delta_crnt.x
+                        + factor_phi_ak_post * delta_post.x);
+        f_phi_al.x = prefactor_phi
+                    * (factor_phi_al_ante * delta_ante.x + factor_phi_al_crnt * delta_crnt.x
+                        + factor_phi_al_post * delta_post.x);
+
+        f_phi_ai.y = prefactor_phi
+                        * (factor_phi_ai_ante * delta_ante.y + factor_phi_ai_crnt * delta_crnt.y
+                            + factor_phi_ai_post * delta_post.y);
+        f_phi_aj.y = prefactor_phi
+                    * (factor_phi_aj_ante * delta_ante.y + factor_phi_aj_crnt * delta_crnt.y
+                        + factor_phi_aj_post * delta_post.y);
+        f_phi_ak.y = prefactor_phi
+                    * (factor_phi_ak_ante * delta_ante.y + factor_phi_ak_crnt * delta_crnt.y
+                        + factor_phi_ak_post * delta_post.y);
+        f_phi_al.y = prefactor_phi
+                    * (factor_phi_al_ante * delta_ante.y + factor_phi_al_crnt * delta_crnt.y
+                        + factor_phi_al_post * delta_post.y);
+
+        f_phi_ai.z = prefactor_phi
+                        * (factor_phi_ai_ante * delta_ante.z + factor_phi_ai_crnt * delta_crnt.z
+                            + factor_phi_ai_post * delta_post.z);
+        f_phi_aj.z = prefactor_phi
+                    * (factor_phi_aj_ante * delta_ante.z + factor_phi_aj_crnt * delta_crnt.z
+                        + factor_phi_aj_post * delta_post.z);
+        f_phi_ak.z = prefactor_phi
+                    * (factor_phi_ak_ante * delta_ante.z + factor_phi_ak_crnt * delta_crnt.z
+                        + factor_phi_ak_post * delta_post.z);
+        f_phi_al.z = prefactor_phi
+                    * (factor_phi_al_ante * delta_ante.z + factor_phi_al_crnt * delta_crnt.z
+                        + factor_phi_al_post * delta_post.z);
+
+        /* PART 3 - COMPUTES THE FORCE COMPONENTS DUE TO THE DERIVATIVES OF BENDING ANGLE THETHA_ANTHE */
+
+        /*      Computation of ratios */
+        ratio_theta_ante_ante = c_cros_ante / c_self_ante;
+        ratio_theta_ante_crnt = c_cros_ante / c_self_crnt;
+
+        /*      Computation of the prefactor */
+        prefactor_theta_ante =
+                -k_phi * norm_theta_ante
+                * (a0 + a1 * cosine_phi + a2 * (cosine_phi_sq)
+                + a3 * (cosine_phi * cosine_phi_sq) + a4 * (cosine_phi_sq * cosine_phi_sq))
+                * (-3.0) * cosine_theta_ante * sine_theta_ante * sine_theta_post_sq * sine_theta_post;
+
+        /*      Computation of forces due to the derivatives of bending angle theta_ante */
+        f_theta_ante_ai.x =
+                prefactor_theta_ante * (ratio_theta_ante_ante * delta_ante.x - delta_crnt.x);
+        f_theta_ante_aj.x = prefactor_theta_ante
+                            * ((ratio_theta_ante_crnt + 1.0) * delta_crnt.x
+                                - (ratio_theta_ante_ante + 1.0) * delta_ante.x);
+        f_theta_ante_ak.x =
+                prefactor_theta_ante * (delta_ante.x - ratio_theta_ante_crnt * delta_crnt.x);
+
+        f_theta_ante_ai.y =
+                prefactor_theta_ante * (ratio_theta_ante_ante * delta_ante.y - delta_crnt.y);
+        f_theta_ante_aj.y = prefactor_theta_ante
+                            * ((ratio_theta_ante_crnt + 1.0) * delta_crnt.y
+                                - (ratio_theta_ante_ante + 1.0) * delta_ante.y);
+        f_theta_ante_ak.y =
+                prefactor_theta_ante * (delta_ante.y - ratio_theta_ante_crnt * delta_crnt.y);
+
+        f_theta_ante_ai.z =
+                prefactor_theta_ante * (ratio_theta_ante_ante * delta_ante.z - delta_crnt.z);
+        f_theta_ante_aj.z = prefactor_theta_ante
+                            * ((ratio_theta_ante_crnt + 1.0) * delta_crnt.z
+                                - (ratio_theta_ante_ante + 1.0) * delta_ante.z);
+        f_theta_ante_ak.z =
+                prefactor_theta_ante * (delta_ante.z - ratio_theta_ante_crnt * delta_crnt.z);
+
+        /* PART 4 - COMPUTES THE FORCE COMPONENTS DUE TO THE DERIVATIVES OF THE BENDING ANGLE THETA_POST */
+
+        /*      Computation of ratios */
+        ratio_theta_post_crnt = c_cros_post / c_self_crnt;
+        ratio_theta_post_post = c_cros_post / c_self_post;
+
+        /*     Computation of the prefactor */
+        prefactor_theta_post =
+                -k_phi * norm_theta_post
+                * (a0 + a1 * cosine_phi + a2 * (cosine_phi_sq)
+                + a3 * (cosine_phi * cosine_phi_sq) + a4 * (cosine_phi_sq * cosine_phi_sq))
+                * sine_theta_ante_sq * sine_theta_ante * (-3.0) * cosine_theta_post * sine_theta_post;
+
+        /*      Computation of forces due to the derivatives of bending angle Theta_Post */
+        f_theta_post_aj.x =
+                prefactor_theta_post * (ratio_theta_post_crnt * delta_crnt.x - delta_post.x);
+        f_theta_post_ak.x = prefactor_theta_post
+                            * ((ratio_theta_post_post + 1.0) * delta_post.x
+                                - (ratio_theta_post_crnt + 1.0) * delta_crnt.x);
+        f_theta_post_al.x =
+                prefactor_theta_post * (delta_crnt.x - ratio_theta_post_post * delta_post.x);
         
+        f_theta_post_aj.y =
+                prefactor_theta_post * (ratio_theta_post_crnt * delta_crnt.y - delta_post.y);
+        f_theta_post_ak.y = prefactor_theta_post
+                            * ((ratio_theta_post_post + 1.0) * delta_post.y
+                                - (ratio_theta_post_crnt + 1.0) * delta_crnt.y);
+        f_theta_post_al.y =
+                prefactor_theta_post * (delta_crnt.y - ratio_theta_post_post * delta_post.y);
 
+        f_theta_post_aj.z =
+                prefactor_theta_post * (ratio_theta_post_crnt * delta_crnt.z - delta_post.z);
+        f_theta_post_ak.z = prefactor_theta_post
+                            * ((ratio_theta_post_post + 1.0) * delta_post.z
+                                - (ratio_theta_post_crnt + 1.0) * delta_crnt.z);
+        f_theta_post_al.z =
+                prefactor_theta_post * (delta_crnt.z - ratio_theta_post_post * delta_post.z);
+
+        /* PART 5 - APPLIES THE FORCES AND VIRIAL TENSOR FROM THIS DIHEDRAL */
+
+        /* Contribution to energy - for formula see file "dihedral.py" */
+        energy = k_phi
+            * (a0 + a1 * cosine_phi + a2 * cosine_phi_sq
+                + a3 * (cosine_phi * cosine_phi_sq) + a4 * (cosine_phi_sq * cosine_phi_sq))
+            * sine_theta_ante_sq * sine_theta_ante * sine_theta_post_sq * sine_theta_post;
+        // Compute 1/4 of energy to assign to each of 4 atoms in the dihedral
+        e_dihedral = 0.25 * energy;
+
+        // Apply force and energy depending on the relative position of the particle
+        force_idx.w += e_dihedral;
         if (cur_dihedral_abcd == 0)
             {
-            force_idx.x += F0.x;
-            force_idx.y += F0.y;
-            force_idx.z += F0.z;
+            force_idx.x += f_phi_ai.x + f_theta_ante_ai.x;
+            force_idx.y += f_phi_ai.y + f_theta_ante_ai.y;
+            force_idx.z += f_phi_ai.z + f_theta_ante_ai.z;
             }
         if (cur_dihedral_abcd == 1)
             {
-            force_idx.x += F1.x;
-            force_idx.y += F1.y;
-            force_idx.z += F1.z;
+            force_idx.x += f_phi_aj.x + f_theta_ante_aj.x + f_theta_post_aj.x;
+            force_idx.y += f_phi_aj.y + f_theta_ante_aj.y + f_theta_post_aj.y;
+            force_idx.z += f_phi_aj.z + f_theta_ante_aj.z + f_theta_post_aj.z;
             }
         if (cur_dihedral_abcd == 2)
             {
-            force_idx.x += F2.x;
-            force_idx.y += F2.y;
-            force_idx.z += F2.z;
+            force_idx.x += f_phi_ak.x + f_theta_ante_ak.x + f_theta_post_ak.x;
+            force_idx.y += f_phi_ak.y + f_theta_ante_ak.y + f_theta_post_ak.y;
+            force_idx.z += f_phi_ak.z + f_theta_ante_ak.z + f_theta_post_ak.z;
             }
         if (cur_dihedral_abcd == 3)
             {
-            force_idx.x += F3.x;
-            force_idx.y += F3.y;
-            force_idx.z += F3.z;
+            force_idx.x += f_phi_al.x + f_theta_post_al.x;
+            force_idx.y += f_phi_al.y + f_theta_post_al.y;
+            force_idx.z += f_phi_al.z + f_theta_post_al.z;
             }
 
-        // Compute 1/4 of energy to assign to each of 4 atoms in the dihedral
-        e_dihedral = 0.25 * prefactor * torsion_e;
-        force_idx.w += e_dihedral;
+        // Contributions to the virial from the dihedral, theta_ante, and theta_post
+        theta_ante_virial[0] = (1. / 3.) * (delta_ante.x * f_theta_ante_ai.x + delta_crnt.x * f_theta_ante_ak.x);
+        theta_ante_virial[1] = (1. / 3.) * (delta_ante.y * f_theta_ante_ai.x + delta_crnt.y * f_theta_ante_ak.x);
+        theta_ante_virial[2] = (1. / 3.) * (delta_ante.z * f_theta_ante_ai.x + delta_crnt.z * f_theta_ante_ak.x);
+        theta_ante_virial[3] = (1. / 3.) * (delta_ante.y * f_theta_ante_ai.y + delta_crnt.y * f_theta_ante_ak.y);
+        theta_ante_virial[4] = (1. / 3.) * (delta_ante.z * f_theta_ante_ai.y + delta_crnt.z * f_theta_ante_ak.y);
+        theta_ante_virial[5] = (1. / 3.) * (delta_ante.z * f_theta_ante_ai.z + delta_crnt.z * f_theta_ante_ak.z);
 
-        // for (int k = 0; k < 6; k++)
-        //     virial_idx[k] += dihedral_virial[k];
-        // }
+        theta_post_virial[0] = (1. / 3.) * (delta_crnt.x * f_theta_post_aj.x + delta_post.x * f_theta_post_al.x);
+        theta_post_virial[1] = (1. / 3.) * (delta_crnt.y * f_theta_post_aj.x + delta_post.y * f_theta_post_al.x);
+        theta_post_virial[2] = (1. / 3.) * (delta_crnt.z * f_theta_post_aj.x + delta_post.z * f_theta_post_al.x);
+        theta_post_virial[3] = (1. / 3.) * (delta_crnt.y * f_theta_post_aj.y + delta_post.y * f_theta_post_al.y);
+        theta_post_virial[4] = (1. / 3.) * (delta_crnt.z * f_theta_post_aj.y + delta_post.z * f_theta_post_al.y);
+        theta_post_virial[5] = (1. / 3.) * (delta_crnt.z * f_theta_post_aj.z + delta_post.z * f_theta_post_al.z);
+    
+        dihedral_phi_virial[0] = 0.25 * (delta_ante.x * f_phi_ai.x + delta_crnt.x * f_phi_ak.x + (delta_post.x+ delta_crnt.x) * f_phi_al.x);
+        dihedral_phi_virial[1] = 0.25 * (delta_ante.y * f_phi_ai.x + delta_crnt.y * f_phi_ak.x + (delta_post.y+ delta_crnt.y) * f_phi_al.x);
+        dihedral_phi_virial[2] = 0.25 * (delta_ante.z * f_phi_ai.x + delta_crnt.z * f_phi_ak.x + (delta_post.z+ delta_crnt.z) * f_phi_al.x);
+        dihedral_phi_virial[3] = 0.25 * (delta_ante.y * f_phi_ai.y + delta_crnt.y * f_phi_ak.y + (delta_post.y+ delta_crnt.y) * f_phi_al.y);
+        dihedral_phi_virial[4] = 0.25 * (delta_ante.z * f_phi_ai.y + delta_crnt.z * f_phi_ak.y + (delta_post.z+ delta_crnt.z) * f_phi_al.y);
+        dihedral_phi_virial[5] = 0.25 * (delta_ante.z * f_phi_ai.z + delta_crnt.z * f_phi_ak.z + (delta_post.z+ delta_crnt.z) * f_phi_al.z);
+        
+        if (cur_dihedral_abcd == 0)
+            {
+            for (int k = 0; k < 6; k++)
+                virial_idx[k] = dihedral_phi_virial[k]+theta_ante_virial[k];
+            }
+        if (cur_dihedral_abcd == 1)
+            {
+            for (int k = 0; k < 6; k++)
+                virial_idx[k] = dihedral_phi_virial[k]
+                                + theta_ante_virial[k]
+                                + theta_post_virial[k];
+            }
+        if (cur_dihedral_abcd == 2)
+            {
+            for (int k = 0; k < 6; k++)
+                virial_idx[k] = dihedral_phi_virial[k]
+                                + theta_ante_virial[k]
+                                + theta_post_virial[k];
+            }
+        if (cur_dihedral_abcd == 3)
+            {
+            for (int k = 0; k < 6; k++)
+                virial_idx[k] = dihedral_phi_virial[k]
+                                + theta_post_virial[k];
+            }
+        }
 
     // now that the force calculation is complete, write out the result (MEM TRANSFER: 20 bytes)
     d_force[idx] = force_idx;
