@@ -1,125 +1,151 @@
-# Copyright (c) 2018-2020, Michael P. Howard
-# Copyright (c) 2021-2024, Auburn University
-# Part of azplugins, released under the BSD 3-Clause License.
-
-"""Flow profiles."""
-
-import numpy
-from hoomd.data.parameterdicts import ParameterDict
-from hoomd.logging import log
+import numpy as np
 from hoomd.custom import Action
 
+class CylindricalFlowFieldProfiler(Action):
+    """Measure average profiles in cylindrical coordinates (radial and axial).
 
-class FlowFieldProfiler(Action):
-    """Measure average profiles in 3D.
-
-    The average density, velocity, and temperature profiles are computed along
-    a given spatial dimension. Both number and mass densities and velocities
-    are available.
+    Computes radial profiles for number density, mass density, velocities, and temperature (kT).
 
     Args:
-        num_bins: int or 3-tuple - number of bins in all three directions
-        bin_ranges: (3,2) array - ranges for all three directions
+        num_bins (int): Number of bins in the radial direction.
+        bin_ranges (2-tuple of tuples): Ranges for radial (r_min, r_max) and axial (z_min, z_max) directions.
 
-    Examples::
-
-        flow_field = hoomd.azplugins.compute.FlowFieldProfiler(
-                num_bins=(10,10,10),
-                bin_ranges=([-L/2.,L/2.],
-                            [-L/2.,L/2.],
-                            [-L/2.,L/2.])
-                )
-        flow_field_writer = hoomd.write.CustomWriter(action=flow_field,
-                                                    trigger=hoomd.trigger.Periodic(100))
-        simulation.operations.writers.append(flow_field_writer)
-
+    Example:
+        flow_field = CylindricalFlowFieldProfiler(
+            num_bins=100,
+            bin_ranges=([r_min, r_max], [z_min, z_max])
+        )
     """
+
     def __init__(self, num_bins, bin_ranges):
         super().__init__()
+        self.num_bins = int(num_bins)
+        self.bin_ranges = np.array(bin_ranges, dtype=float)
 
-        self.bin_ranges = numpy.array(bin_ranges, dtype=float)
-        if self.bin_ranges.shape != (3, 2):
-            raise TypeError("bin_ranges must be (3,2) array")
-        elif numpy.any(self.bin_ranges[:, 1] <= self.bin_ranges[:, 0]):
-            raise ValueError("Bin ranges must be increasing")
+        # Verify the bin ranges
+        if self.bin_ranges.shape != (2, 2):
+            raise TypeError('bin_ranges must be a (2,2) array for radial and axial ranges in cylindrical coordinates')
 
-        self.num_bins = numpy.array(num_bins, dtype=int)
-        if self.num_bins.ndim == 0:
-            self.num_bins = numpy.array([num_bins, num_bins, num_bins], dtype=int)
+        if self.bin_ranges[0, 1] <= self.bin_ranges[0, 0]:
+            raise ValueError('Radial range must be increasing')
 
-        if self.num_bins.shape != (3,):
-            raise TypeError("num_bins must be int or 3-tuple")
+        # Initialize bin edges and centers for radial direction
+        self.bin_edges_r = np.linspace(self.bin_ranges[0, 0], self.bin_ranges[0, 1], self.num_bins + 1)
+        self.bin_centers_r = 0.5 * (self.bin_edges_r[:-1] + self.bin_edges_r[1:])
+        self.bin_sizes_r = self.bin_edges_r[1:] - self.bin_edges_r[:-1]
 
-        if not numpy.all(self.num_bins > 1):
-            raise ValueError("At least 1 bin required per dimension")
-
-        self.bin_sizes = (self.bin_ranges[:, 1] - self.bin_ranges[:, 0]) / self.num_bins
-
-        self.bin_edges = []
-        for dim in range(3):
-            edges = numpy.linspace(
-                start=self.bin_ranges[dim, 0],
-                stop=self.bin_ranges[dim, 1],
-                num=self.num_bins[dim] + 1,
-            )
-            self.bin_edges.append(edges)
-
-        total_bins = numpy.prod(self.num_bins)
-        self._counts = numpy.zeros(total_bins, dtype=int)
-        self._velocity = numpy.zeros((total_bins, 3), dtype=float)
+        # Initialize arrays for storing profiles
+        self._number_density = np.zeros(self.num_bins, dtype=float)
+        self._mass_density = np.zeros(self.num_bins, dtype=float)
+        self._number_velocity = np.zeros((self.num_bins, 3), dtype=float)  # Stores [v_r, v_theta, v_z]
+        self._mass_velocity = np.zeros((self.num_bins, 3), dtype=float)    # Mass-averaged velocities
+        self._kT = np.zeros(self.num_bins, dtype=float)  # Temperature profile
+        self._counts = np.zeros(self.num_bins, dtype=int)
         self._num_samples = 0
 
     def act(self, timestep):
+        """Compute flow profiles in cylindrical coordinates at the given timestep."""
         with self._state.cpu_local_snapshot as snap:
-            type_filter = snap.particles.typeid != 1
-            pos = snap.particles.position[type_filter]
-            vel = snap.particles.velocity[type_filter]
+            pos = snap.particles.position
+            vel = snap.particles.velocity
+            mass = snap.particles.mass
 
-            in_range_filter = numpy.all(
-                numpy.logical_and(
-                    pos >= self.bin_ranges[:, 0], pos < self.bin_ranges[:, 1]
-                ),
-                axis=1,
-            )
-            binids = numpy.floor(
-                (pos[in_range_filter] - self.bin_ranges[:, 0]) / self.bin_sizes
-            ).astype(int)
+            # Compute radial distance
+            x, y, z = pos[:, 0], pos[:, 1], pos[:, 2]
+            r = np.sqrt(x**2 + y**2)
 
-            # accumulate
-            binids_1d = numpy.ravel_multi_index(binids.T, self.num_bins)
-            numpy.add.at(self._counts, binids_1d, 1)
-            numpy.add.at(self._velocity, binids_1d, vel[in_range_filter])
+            # Filter particles within radial and axial bounds
+            in_range_filter = (r >= self.bin_ranges[0, 0]) & (r < self.bin_ranges[0, 1]) & (z >= self.bin_ranges[1, 0]) & (z <= self.bin_ranges[1, 1])
+            r_filtered = r[in_range_filter]
+            vel_filtered = vel[in_range_filter]
+            mass_filtered = mass[in_range_filter]
+            x_filtered, y_filtered = x[in_range_filter], y[in_range_filter]
 
+            # Radial velocity component (projected from Cartesian components)
+            v_x, v_y, v_z = vel_filtered[:, 0], vel_filtered[:, 1], vel_filtered[:, 2]
+            v_r = (x_filtered * v_x + y_filtered * v_y) / r_filtered
+            v_r = np.where(r_filtered != 0, v_r, 0.0)  # Handle cases where r=0
+
+            # Azimuthal velocity component
+            v_theta = (-y_filtered * v_x + x_filtered * v_y) / r_filtered
+            v_theta = np.where(r_filtered != 0, v_theta, 0.0)  # Handle cases where r=0
+
+            # Bin particles by their radial distance
+            bin_indices = np.digitize(r_filtered, self.bin_edges_r) - 1
+            valid_bins = (bin_indices >= 0) & (bin_indices < self.num_bins)
+            bin_indices = bin_indices[valid_bins]
+            particles_in_bins = in_range_filter.nonzero()[0][valid_bins]
+
+            # Accumulate number density, mass density, velocity, and temperature
+            np.add.at(self._counts, bin_indices, 1)
+            np.add.at(self._number_density, bin_indices, 1)  # Number density is count-based
+            np.add.at(self._mass_density, bin_indices, mass_filtered)  # Sum of mass for mass density
+
+            # Number-averaged velocity components
+            np.add.at(self._number_velocity[:, 0], bin_indices, v_r[particles_in_bins])      # Radial
+            np.add.at(self._number_velocity[:, 1], bin_indices, v_theta[particles_in_bins])  # Azimuthal
+            np.add.at(self._number_velocity[:, 2], bin_indices, v_z[particles_in_bins])      # Axial
+
+            # Mass-averaged velocity components (mass-weighted)
+            np.add.at(self._mass_velocity[:, 0], bin_indices, v_r[particles_in_bins] * mass_filtered[valid_bins])
+            np.add.at(self._mass_velocity[:, 1], bin_indices, v_theta[particles_in_bins] * mass_filtered[valid_bins])
+            np.add.at(self._mass_velocity[:, 2], bin_indices, v_z[particles_in_bins] * mass_filtered[valid_bins])
+
+            # Temperature profile (kT)
+            np.add.at(self._kT, bin_indices, mass_filtered * (np.linalg.norm(vel_filtered, axis=1) ** 2) / 3)
+
+            # Increment the sample count
             self._num_samples += 1
 
-    @property
-    def density(self):
-        density = numpy.zeros(self._counts.shape, dtype=float)
-        if self._num_samples > 0:
-            bin_volume = numpy.prod(self.bin_sizes)
-            density = self._counts / (self._num_samples * bin_volume)
-        return numpy.reshape(density, self.num_bins)
+    def finalize_profiles(self):
+        """Finalize the averaging of profiles after all sampling."""
+        nonzero = self._counts > 0
+
+        # Normalize densities
+        bin_areas = 2 * np.pi * self.bin_centers_r * self.bin_sizes_r
+        self._number_density[nonzero] /= (self._num_samples * bin_areas[nonzero])
+        self._mass_density[nonzero] /= (self._num_samples * bin_areas[nonzero])
+
+        # Average velocities
+        self._number_velocity[nonzero] /= self._counts[nonzero, None]
+        self._mass_velocity[nonzero] /= self._mass_density[nonzero, None]  # Mass-weighted average
+
+        # Temperature (kT)
+        self._kT[nonzero] /= self._counts[nonzero]
 
     @property
-    def velocity(self):
-        velocity = numpy.zeros_like(self._velocity)
-        velocity = numpy.divide(
-            self._velocity, self._counts[:, None], out=velocity, where=self._counts[:, None] > 0
-        )
-        return velocity
+    def number_density(self):
+        """Return the number density profile."""
+        return self._number_density
+
+    @property
+    def mass_density(self):
+        """Return the mass density profile."""
+        return self._mass_density
+
+    @property
+    def number_velocity(self):
+        """Return the number-averaged velocity profile as an array."""
+        return self._number_velocity
+
+    @property
+    def mass_velocity(self):
+        """Return the mass-averaged velocity profile as an array."""
+        return self._mass_velocity
+
+    @property
+    def temperature(self):
+        """Return the temperature profile."""
+        return self._kT
 
     def write(self, filename):
-        bin_centers = []
-        for dim in range(3):
-            bin_centers.append(
-                0.5 * (self.bin_edges[dim][:-1] + self.bin_edges[dim][1:])
-            )
-        bin_centers_mesh = numpy.meshgrid(*bin_centers)
-        numpy.savez(
+        """Write the computed profiles to a file."""
+        np.savez(
             filename,
-            X=bin_centers_mesh[0],
-            Y=bin_centers_mesh[1],
-            Z=bin_centers_mesh[2],
-            density=self.density,
-            velocity=self.velocity,
+            r=self.bin_centers_r,
+            number_density=self.number_density,
+            mass_density=self.mass_density,
+            number_velocity=self.number_velocity,
+            mass_velocity=self.mass_velocity,
+            temperature=self.temperature,
         )
