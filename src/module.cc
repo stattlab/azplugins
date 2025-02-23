@@ -73,6 +73,12 @@ void export_PotentialPairExpandedYukawa(pybind11::module&);
 void export_PotentialPairHertz(pybind11::module&);
 void export_PotentialPairPerturbedLennardJones(pybind11::module&);
 
+// sllod
+void export_Thermostat2(pybind11::module&);
+void export_ComputeThermoSLLOD(pybind11::module&);
+void export_MTTKThermostatSLLOD(pybind11::module&);
+void export_TwoStepConstantVolumeSLLOD(pybind11::module&);
+
 // dpd
 void export_PotentialPairDPDThermoGeneralWeight(pybind11::module&);
 
@@ -97,6 +103,9 @@ void export_PotentialPairExpandedYukawaGPU(pybind11::module&);
 void export_PotentialPairHertzGPU(pybind11::module&);
 void export_PotentialPairPerturbedLennardJonesGPU(pybind11::module&);
 
+// sllod
+void export_ComputeThermoSLLODGPU(pybind11::module&);
+void export_TwoStepConstantVolumeSLLODGPU(pybind11::module&);
 // dpd
 void export_PotentialPairDPDThermoGeneralWeightGPU(pybind11::module&);
 
@@ -135,6 +144,12 @@ PYBIND11_MODULE(_azplugins, m)
     export_PotentialPairHertz(m);
     export_PotentialPairPerturbedLennardJones(m);
 
+    // sllod
+    export_Thermostat2(m);
+    export_ComputeThermoSLLOD(m);
+    export_MTTKThermostatSLLOD(m);
+    export_TwoStepConstantVolumeSLLOD(m);
+
     // dpd pair
     export_PotentialPairDPDThermoGeneralWeight(m);
 
@@ -158,6 +173,10 @@ PYBIND11_MODULE(_azplugins, m)
     export_PotentialPairExpandedYukawaGPU(m);
     export_PotentialPairHertzGPU(m);
     export_PotentialPairPerturbedLennardJonesGPU(m);
+
+    // sllod
+    export_ComputeThermoSLLODGPU(m);
+    export_TwoStepConstantVolumeSLLODGPU(m);
 
     // dpd pair
     export_PotentialPairDPDThermoGeneralWeightGPU(m);

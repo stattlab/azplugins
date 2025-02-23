@@ -4,18 +4,25 @@ set(COMPONENT_NAME azplugins)
 # TODO: List all host C++ source code files in _${COMPONENT_NAME}_sources.
 set(_${COMPONENT_NAME}_sources
     ConstantFlow.cc
-    module.cc
+    ComputeThermoSLLOD.cc
+    ThermostatMTTKSLLOD.cc
     ParabolicFlow.cc
+    TwoStepConstantVolumeSLLOD.cc
     VelocityCompute.cc
+    module.cc
     )
 if (ENABLE_HIP)
     list(APPEND _${COMPONENT_NAME}_sources
+    ComputeThermoSLLOD.cc
+    TwoStepConstantVolumeSLLODGPU.cc
     VelocityComputeGPU.cc
     )
 endif()
 
 # TODO: List all GPU C++ source code files in _${COMPONENT_NAME}_cu_sources.
 set(_${COMPONENT_NAME}_cu_sources
+    ComputeThermoSLLOD.cu
+    TwoStepConstantVolumeSLLOD.cu
     VelocityComputeGPU.cu
     VelocityFieldComputeGPU.cu
     )
@@ -28,6 +35,7 @@ set(python_files
     conftest.py
     external.py
     flow.py
+    sllod.py
     pair.py
     )
 
