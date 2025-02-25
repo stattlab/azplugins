@@ -291,6 +291,54 @@ __global__ void gpu_compute_rotational_ke_partial_sums(Scalar* d_scratch,
         }
     }
 
+extern "C" __global__ void remove_flow_field(Scalar4* d_vel,
+                                             Scalar4* d_pos,
+                                             unsigned int* d_group_members,
+                                             unsigned int work_size,
+                                             Scalar shear_rate,
+                                             unsigned int offset)
+    {
+    // determine which particle this thread works on
+    int group_idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (group_idx < work_size)
+        {
+        unsigned int idx = d_group_members[group_idx + offset];
+
+        Scalar4 pos = d_pos[idx];
+        Scalar4 vel = d_vel[idx];
+
+        vel.x -= shear_rate * pos.y;
+
+        // write out data
+        d_vel[idx] = vel; // make_scalar4(v.x,v.y,v.z,vel.w);
+        }
+    }
+
+extern "C" __global__ void add_flow_field(Scalar4* d_vel,
+                                          Scalar4* d_pos,
+                                          unsigned int* d_group_members,
+                                          unsigned int work_size,
+                                          Scalar shear_rate,
+                                          unsigned int offset)
+    {
+    // determine which particle this thread works on
+    int group_idx = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (group_idx < work_size)
+        {
+        unsigned int idx = d_group_members[group_idx + offset];
+
+        Scalar4 pos = d_pos[idx];
+        Scalar4 vel = d_vel[idx];
+
+        vel.x += shear_rate * pos.y;
+
+        // write out data
+        d_vel[idx] = vel; // make_scalar4(v.x,v.y,v.z,vel.w);
+        }
+    }
+
 //! Complete partial sums and compute final thermodynamic quantities (for pressure, only isotropic
 //! contribution)
 /*! \param d_properties Property array to write final values

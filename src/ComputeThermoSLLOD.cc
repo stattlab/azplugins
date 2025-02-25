@@ -24,8 +24,9 @@ namespace azplugins
     \param group Subset of the system over which properties are calculated
 */
 ComputeThermoSLLOD::ComputeThermoSLLOD(std::shared_ptr<SystemDefinition> sysdef,
-                             std::shared_ptr<ParticleGroup> group)
-    : Compute(sysdef), m_group(group)
+                                       std::shared_ptr<ParticleGroup> group,
+                                       Scalar shear_rate)
+    : Compute(sysdef), m_group(group), m_shear_rate(shear_rate)
     {
 
     m_exec_conf->msg->notice(5) << "Constructing ComputeThermoSLLOD" << endl;
@@ -52,15 +53,17 @@ ComputeThermoSLLOD::~ComputeThermoSLLOD()
 void ComputeThermoSLLOD::compute(uint64_t timestep)
     {
 
-    //ComputeThermo::compute(timestep);
+    Compute::compute(timestep);
 
-
-    //if (shouldCompute(timestep))
-     //   {
+    if (shouldCompute(timestep))
+        {
+        removeFlowField();
 
         computeProperties();
         m_computed_flags = m_pdata->getFlags();
-     //   }
+
+        addFlowField();
+        }
     }
 
 /*! Computes all thermodynamic properties of the system in one fell swoop.
@@ -303,12 +306,69 @@ void ComputeThermo::reduceProperties()
     }
 #endif
 
+
+void ComputeThermoSLLOD::removeFlowField()
+{
+  unsigned int group_size = m_group->getNumMembers();
+
+  ArrayHandle<Scalar4> h_vel(m_pdata->getVelocities(), access_location::host, access_mode::readwrite);
+  ArrayHandle<Scalar4> h_pos(m_pdata->getPositions(), access_location::host, access_mode::read);
+
+  for (unsigned int group_idx = 0; group_idx < group_size; group_idx++)
+      {
+      unsigned int j = m_group->getMemberIndex(group_idx);
+
+      // load velocity & position
+      Scalar3 v = make_scalar3(h_vel.data[j].x, h_vel.data[j].y, h_vel.data[j].z);
+      const Scalar4 p = h_pos.data[j];
+
+      // remove flow field
+      v.x -= m_shear_rate*p.y;
+
+      // store velocity
+      h_vel.data[j].x = v.x;
+      h_vel.data[j].y = v.y;
+      h_vel.data[j].z = v.z;
+
+      }
+
+}
+
+void ComputeThermoSLLOD::addFlowField()
+{
+
+  unsigned int group_size = m_group->getNumMembers();
+
+  ArrayHandle<Scalar4> h_vel(m_pdata->getVelocities(), access_location::host, access_mode::readwrite);
+  ArrayHandle<Scalar4> h_pos(m_pdata->getPositions(), access_location::host, access_mode::read);
+
+  for (unsigned int group_idx = 0; group_idx < group_size; group_idx++)
+      {
+      unsigned int j = m_group->getMemberIndex(group_idx);
+
+      // load velocity & position
+      Scalar3 v = make_scalar3(h_vel.data[j].x, h_vel.data[j].y, h_vel.data[j].z);
+      const Scalar4 p = h_pos.data[j];
+
+      // add flow field
+      v.x += m_shear_rate*p.y;
+
+      // store velocity
+      h_vel.data[j].x = v.x;
+      h_vel.data[j].y = v.y;
+      h_vel.data[j].z = v.z;
+
+      }
+
+}
+
+
 namespace detail
     {
 void export_ComputeThermoSLLOD(pybind11::module& m)
     {
     pybind11::class_<ComputeThermoSLLOD, Compute, std::shared_ptr<ComputeThermoSLLOD>>(m, "ComputeThermoSLLOD")
-        .def(pybind11::init<std::shared_ptr<SystemDefinition>, std::shared_ptr<ParticleGroup>>())
+        .def(pybind11::init<std::shared_ptr<SystemDefinition>, std::shared_ptr<ParticleGroup>, Scalar>())
         .def_property_readonly("kinetic_temperature", &ComputeThermoSLLOD::getTemperature)
         .def_property_readonly("pressure", &ComputeThermoSLLOD::getPressure)
         .def_property_readonly("pressure_tensor", &ComputeThermoSLLOD::getPressureTensorPython)

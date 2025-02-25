@@ -18,8 +18,9 @@ namespace azplugins
 
 TwoStepConstantVolumeSLLODGPU::TwoStepConstantVolumeSLLODGPU(std::shared_ptr<SystemDefinition> sysdef,
                                                    std::shared_ptr<ParticleGroup> group,
-                                                   std::shared_ptr<md::Thermostat> thermostat)
-    : TwoStepConstantVolumeSLLOD(sysdef, group, thermostat)
+                                                   std::shared_ptr<md::Thermostat> thermostat,
+                                                   Scalar shear_rate)
+    : TwoStepConstantVolumeSLLOD(sysdef, group, thermostat, shear_rate)
     {
     if (!m_exec_conf->isCUDAEnabled())
         {
@@ -226,7 +227,8 @@ void export_TwoStepConstantVolumeSLLODGPU(pybind11::module& m)
                      std::shared_ptr<TwoStepConstantVolumeSLLODGPU>>(m, "TwoStepConstantVolumeSLLODGPU")
         .def(pybind11::init<std::shared_ptr<SystemDefinition>,
                             std::shared_ptr<ParticleGroup>,
-                            std::shared_ptr<ThermostatMTTKSLLOD>>());
+                            std::shared_ptr<ThermostatMTTKSLLOD>,
+                            Scalar>());
     }
     } // end namespace detail
 

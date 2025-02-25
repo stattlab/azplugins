@@ -32,7 +32,8 @@ class PYBIND11_EXPORT TwoStepConstantVolumeSLLOD : public md::IntegrationMethodT
     */
     TwoStepConstantVolumeSLLOD(std::shared_ptr<SystemDefinition> sysdef,
                           std::shared_ptr<ParticleGroup> group,
-                          std::shared_ptr<MTTKThermostatSLLOD> thermostat);
+                          std::shared_ptr<MTTKThermostatSLLOD> thermostat,
+                          Scalar shear_rate);
 
     virtual ~TwoStepConstantVolumeSLLOD();
 
@@ -62,6 +63,17 @@ class PYBIND11_EXPORT TwoStepConstantVolumeSLLOD : public md::IntegrationMethodT
         m_thermostat = thermostat;
         }
 
+        //! Update the shear rate and velocity at boundary
+        /*! \param shear_rate New shear rate to set
+        */
+       virtual void setShearRate(Scalar shear_rate)
+       {
+       m_shear_rate = shear_rate;
+       BoxDim global_box = m_pdata->getGlobalBox();
+       const Scalar3 global_hi = global_box.getHi();
+       m_boundary_shear_velocity = global_hi.y * m_shear_rate*2;
+
+       }
     /** Set the distance limit applied to particles.
 
         @param limit Largest distance particles should move in a given timestep (may be null).
@@ -107,6 +119,11 @@ class PYBIND11_EXPORT TwoStepConstantVolumeSLLOD : public md::IntegrationMethodT
 
     /// The distance limit to apply (may be null).
     std::shared_ptr<Variant> m_limit;
+
+    Scalar m_shear_rate;              //!< shear rate for SLLOD box deformation
+    Scalar m_boundary_shear_velocity; //!< value of the velocity at the box boundary = Ly*shear_rate
+
+    bool deformGlobalBox();
     };
 
 

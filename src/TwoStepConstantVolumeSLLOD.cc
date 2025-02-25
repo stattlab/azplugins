@@ -11,10 +11,11 @@ namespace azplugins
 
 TwoStepConstantVolumeSLLOD::TwoStepConstantVolumeSLLOD(std::shared_ptr<SystemDefinition> sysdef,
         std::shared_ptr<ParticleGroup> group,
-        std::shared_ptr<MTTKThermostatSLLOD> thermostat)
-: md::IntegrationMethodTwoStep(sysdef, group), m_thermostat(thermostat)
+        std::shared_ptr<MTTKThermostatSLLOD> thermostat,
+        Scalar shear_rate)
+: md::IntegrationMethodTwoStep(sysdef, group), m_thermostat(thermostat), m_shear_rate(shear_rate)
 {
-
+    setShearRate(m_shear_rate);
 }
 
 TwoStepConstantVolumeSLLOD::~TwoStepConstantVolumeSLLOD() { }
@@ -26,6 +27,13 @@ void TwoStepConstantVolumeSLLOD::integrateStepOne(uint64_t timestep)
         {
         throw std::runtime_error("Empty integration group.");
         }
+
+    // box deformation: update tilt factor of global box
+    bool flipped = deformGlobalBox();
+
+    BoxDim global_box = m_pdata->getGlobalBox();
+    const Scalar3 global_hi = global_box.getHi();
+    const Scalar3 global_lo = global_box.getLo();
 
     auto rescaling_factors = m_thermostat ? m_thermostat->getRescalingFactorsOne(timestep, m_deltaT)
                                           : std::array<Scalar, 2> {1., 1.};
@@ -44,6 +52,10 @@ void TwoStepConstantVolumeSLLOD::integrateStepOne(uint64_t timestep)
                                    access_location::host,
                                    access_mode::readwrite);
 
+        ArrayHandle<int3> h_image(m_pdata->getImages(),
+                                   access_location::host,
+                                   access_mode::readwrite);
+
         for (unsigned int group_idx = 0; group_idx < group_size; group_idx++)
             {
             unsigned int j = m_group->getMemberIndex(group_idx);
@@ -53,11 +65,24 @@ void TwoStepConstantVolumeSLLOD::integrateStepOne(uint64_t timestep)
             Scalar3 pos = make_scalar3(h_pos.data[j].x, h_pos.data[j].y, h_pos.data[j].z);
             Scalar3 accel = h_accel.data[j];
 
-            // update velocity and position
-            v = v + Scalar(1.0 / 2.0) * accel * m_deltaT;
+            // remove flow field
+            v.x -= m_shear_rate*pos.y;
+
+            // TODO: check order of rescale vs update velocity
 
             // rescale velocity
             v *= rescaling_factors[0];
+
+            // apply sllod velocity correction
+            v.x -= Scalar(0.5)*m_shear_rate*v.y*m_deltaT;
+
+            // add flow field
+            v.x += m_shear_rate*pos.y;
+
+            // update velocity and position
+            v = v + Scalar(1.0 / 2.0) * accel * m_deltaT;
+
+
             if (m_limit)
                 {
                 auto maximum_displacement = m_limit->operator()(timestep);
@@ -68,6 +93,26 @@ void TwoStepConstantVolumeSLLOD::integrateStepOne(uint64_t timestep)
                     }
                 }
             pos += m_deltaT * v;
+
+            // if box deformation caused a flip, account for the box wrapping by modifying images
+            if (flipped){
+                h_image.data[j].x += h_image.data[j].y;
+                //  pos.x *= -1;
+            }
+
+            // Periodic boundary correction to velocity:
+            // if particle leaves from (+/-) y boundary it gets (-/+) velocity at boundary
+            // note carefully that pair potentials dependent on differences in
+            // velocities (e.g. DPD) are not yet explicitly supported.
+
+            if (pos.y > global_hi.y) // crossed pbc in +y
+            {
+                v.x -= m_boundary_shear_velocity;//Scalar(2.0)*m_shear_rate*global_hi.y;
+            }
+            else if (pos.y < global_lo.y) // crossed pbc in -y
+            {
+                v.x += m_boundary_shear_velocity;//-= Scalar(2.0)*m_shear_rate*global_lo.y;
+            }
 
             // store updated variables
             h_vel.data[j].x = v.x;
@@ -82,10 +127,6 @@ void TwoStepConstantVolumeSLLOD::integrateStepOne(uint64_t timestep)
         // particles may have been moved slightly outside the box by the above steps, wrap them back
         // into place
         const BoxDim& box = m_pdata->getBox();
-
-        ArrayHandle<int3> h_image(m_pdata->getImages(),
-                                  access_location::host,
-                                  access_mode::readwrite);
 
         for (unsigned int group_idx = 0; group_idx < group_size; group_idx++)
             {
@@ -239,6 +280,9 @@ void TwoStepConstantVolumeSLLOD::integrateStepTwo(uint64_t timestep)
     ArrayHandle<Scalar4> h_vel(m_pdata->getVelocities(),
                                access_location::host,
                                access_mode::readwrite);
+    ArrayHandle<Scalar4> h_pos(m_pdata->getPositions(),
+                               access_location::host,
+                               access_mode::read);
     ArrayHandle<Scalar3> h_accel(m_pdata->getAccelerations(),
                                  access_location::host,
                                  access_mode::readwrite);
@@ -262,11 +306,20 @@ void TwoStepConstantVolumeSLLOD::integrateStepTwo(uint64_t timestep)
         Scalar minv = Scalar(1.0) / m;
         accel = net_force * minv;
 
+        // update velocity
+        v += Scalar(0.5)*accel*m_deltaT;
+
+        // remove flow field
+        v.x -= m_shear_rate*h_pos.data[j].y;
+
         // rescale velocity
         v *= rescaling_factors[0];
 
-        // update velocity
-        v += Scalar(1.0 / 2.0) * m_deltaT * accel;
+        // apply sllod velocity correction
+        v.x -= Scalar(0.5)*m_shear_rate*v.y*m_deltaT;
+
+        // add flow field
+        v.x += m_shear_rate*h_pos.data[j].y;
 
         // store velocity
         h_vel.data[j].x = v.x;
@@ -330,6 +383,25 @@ void TwoStepConstantVolumeSLLOD::integrateStepTwo(uint64_t timestep)
         }
     }
 
+bool TwoStepConstantVolumeSLLOD::deformGlobalBox()
+    {
+      // box deformation: update tilt factor of global box
+      BoxDim global_box = m_pdata->getGlobalBox();
+
+      Scalar xy = global_box.getTiltFactorXY();
+      Scalar yz = global_box.getTiltFactorYZ();
+      Scalar xz = global_box.getTiltFactorXZ();
+
+      xy += m_shear_rate * m_deltaT;
+      bool flipped = false;
+      if (xy > 0.5){
+          xy = -0.5;
+          flipped = true;
+      }
+      global_box.setTiltFactors(xy, xz, yz);
+      m_pdata->setGlobalBox(global_box);
+      return flipped;
+    }
 
 namespace detail
 {
@@ -341,8 +413,10 @@ void export_TwoStepConstantVolumeSLLOD(pybind11::module& m)
                      std::shared_ptr<TwoStepConstantVolumeSLLOD>>(m, "TwoStepConstantVolumeSLLOD")
         .def(py::init<std::shared_ptr<SystemDefinition>,
                             std::shared_ptr<ParticleGroup>,
-                            std::shared_ptr<MTTKThermostatSLLOD>>())
-        .def("setThermostat", &TwoStepConstantVolumeSLLOD::setThermostat);
+                            std::shared_ptr<MTTKThermostatSLLOD>,
+                            Scalar>())
+        .def("setThermostat", &TwoStepConstantVolumeSLLOD::setThermostat)
+        .def("setShearRate", &TwoStepConstantVolumeSLLOD::setShearRate);
     }
 
 } // end namespace detail

@@ -19,7 +19,8 @@ class PYBIND11_EXPORT TwoStepConstantVolumeSLLODGPU : public TwoStepConstantVolu
     public:
     TwoStepConstantVolumeSLLODGPU(std::shared_ptr<SystemDefinition> sysdef,
                              std::shared_ptr<ParticleGroup> group,
-                             std::shared_ptr<ThermostatMTTKSLLOD> thermostat);
+                             std::shared_ptr<ThermostatMTTKSLLOD> thermostat,
+                             Scalar shear_rate);
 
     virtual ~TwoStepConstantVolumeSLLODGPU() { }
 

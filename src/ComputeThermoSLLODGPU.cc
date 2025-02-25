@@ -24,9 +24,10 @@ namespace azplugins
     \param group Subset of the system over which properties are calculated
 */
 ComputeThermoSLLODGPU::ComputeThermoSLLODGPU(std::shared_ptr<SystemDefinition> sysdef,
-                                   std::shared_ptr<ParticleGroup> group)
+                                             std::shared_ptr<ParticleGroup> group,
+                                             Scalar shear_rate)
     : ComputeThermoSLLOD(sysdef, group), m_scratch(m_exec_conf), m_scratch_pressure_tensor(m_exec_conf),
-      m_scratch_rot(m_exec_conf)
+      m_scratch_rot(m_exec_conf), m_shear_rate(shear_rate)
     {
     if (!m_exec_conf->isCUDAEnabled())
         {
@@ -50,6 +51,8 @@ void ComputeThermoSLLODGPU::computeProperties()
         return;
 
     unsigned int group_size = m_group->getNumMembers();
+
+    removeFlowField();
 
     assert(m_pdata);
 
@@ -184,7 +187,65 @@ void ComputeThermoSLLODGPU::computeProperties()
     // in MPI, reduce extensive quantities only when they're needed
     m_properties_reduced = !m_pdata->getDomainDecomposition();
 #endif // ENABLE_MPI
+
+    addFlowField();
+
     }
+
+void ComputeThermoSLLODGPU::removeFlowField()
+{
+  unsigned int group_size = m_group->getNumMembers();
+
+  ArrayHandle<Scalar4> d_vel(m_pdata->getVelocities(), access_location::device, access_mode::readwrite);
+  ArrayHandle<Scalar4> d_pos(m_pdata->getPositions(), access_location::device, access_mode::read);
+  ArrayHandle< unsigned int > d_index_array(m_group->getIndexArray(), access_location::device, access_mode::read);
+
+  m_exec_conf->beginMultiGPU();
+
+  // perform the removal of the flow field on the GPU
+
+  gpu::remove_flow_field(d_vel.data,
+                   d_pos.data,
+                   d_index_array.data,
+                   group_size,
+                   m_block_size,
+                   m_shear_rate,
+                   m_group->getGPUPartition());
+
+
+  if(m_exec_conf->isCUDAErrorCheckingEnabled())
+      CHECK_CUDA_ERROR();
+
+  m_exec_conf->endMultiGPU();
+}
+
+void ComputeThermoSLLODGPU::addFlowField()
+{
+  unsigned int group_size = m_group->getNumMembers();
+
+  ArrayHandle<Scalar4> d_vel(m_pdata->getVelocities(), access_location::device, access_mode::readwrite);
+  ArrayHandle<Scalar4> d_pos(m_pdata->getPositions(), access_location::device, access_mode::read);
+  ArrayHandle< unsigned int > d_index_array(m_group->getIndexArray(), access_location::device, access_mode::read);
+
+  m_exec_conf->beginMultiGPU();
+
+  // perform the removal of the flow field on the GPU
+  gpu::add_flow_field(d_vel.data,
+                   d_pos.data,
+                   d_index_array.data,
+                   group_size,
+                   m_block_size,
+                   m_shear_rate,
+                   m_group->getGPUPartition());
+
+
+  if(m_exec_conf->isCUDAErrorCheckingEnabled())
+      CHECK_CUDA_ERROR();
+
+
+  m_exec_conf->endMultiGPU();
+
+}
 
 namespace detail
     {
@@ -193,7 +254,7 @@ void export_ComputeThermoSLLODGPU(pybind11::module& m)
     pybind11::class_<ComputeThermoSLLODGPU, ComputeThermoSLLOD, std::shared_ptr<ComputeThermoSLLODGPU>>(
         m,
         "ComputeThermoSLLODGPU")
-        .def(pybind11::init<std::shared_ptr<SystemDefinition>, std::shared_ptr<ParticleGroup>>());
+        .def(pybind11::init<std::shared_ptr<SystemDefinition>, std::shared_ptr<ParticleGroup>, Scalar>());
     }
 
     } // end namespace detail

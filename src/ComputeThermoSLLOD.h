@@ -56,7 +56,9 @@ class PYBIND11_EXPORT ComputeThermoSLLOD : public Compute
     {
     public:
     //! Constructs the compute
-    ComputeThermoSLLOD(std::shared_ptr<SystemDefinition> sysdef, std::shared_ptr<ParticleGroup> group);
+    ComputeThermoSLLOD(std::shared_ptr<SystemDefinition> sysdef,
+                       std::shared_ptr<ParticleGroup> group,
+                       Scalar shear_rate);
 
     //! Destructor
     virtual ~ComputeThermoSLLOD();
@@ -331,7 +333,7 @@ class PYBIND11_EXPORT ComputeThermoSLLOD : public Compute
     protected:
     std::shared_ptr<ParticleGroup> m_group; //!< Group to compute properties for
     GPUArray<Scalar> m_properties;          //!< Stores the computed properties
-
+    Scalar m_shear_rate;
     /// Store the particle data flags used during the last computation
     PDataFlags m_computed_flags;
 
@@ -344,6 +346,9 @@ class PYBIND11_EXPORT ComputeThermoSLLOD : public Compute
     //! Reduce properties over MPI
     virtual void reduceProperties();
 #endif
+    virtual void addFlowField();
+    virtual void removeFlowField();
+
     };
 
     } // end namespace azplugins

@@ -68,6 +68,22 @@ hipError_t gpu_compute_thermo_final(Scalar* d_properties,
                                     bool compute_pressure_tensor,
                                     bool compute_rotational_energy);
 
+hipError_t add_flow_field(Scalar4 *d_vel,
+                                        Scalar4 *d_pos,
+                                        unsigned int *d_group_members,
+                                        unsigned int group_size,
+                                        unsigned int block_size,
+                                        Scalar shear_rate,
+                                        const GPUPartition& gpu_partition);
+
+hipError_t remove_flow_field(Scalar4 *d_vel,
+                                        Scalar4 *d_pos,
+                                        unsigned int *d_group_members,
+                                        unsigned int group_size,
+                                        unsigned int block_size,
+                                        Scalar shear_rate,
+                                        const GPUPartition& gpu_partition);
+
     } // end namespace kernel
     } // namespace azplugins
     } // end namespace hoomd
